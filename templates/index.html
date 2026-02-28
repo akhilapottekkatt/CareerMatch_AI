@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CareerMatch AI</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<div class="container">
+    <h1>CareerMatch AI</h1>
+    <p>Upload your Resume and Get Job Links</p>
+
+    <form id="uploadForm">
+        <input type="file" id="resume" required>
+        <input type="email" id="email" placeholder="Your email" required>
+        <button type="submit">Upload Resume</button>
+    </form>
+
+    <div id="result"></div>
+</div>
+
+<script>
+document.getElementById("uploadForm")
+.addEventListener("submit", async function(e){
+
+    e.preventDefault();
+
+    let fileInput = document.getElementById("resume");
+    let emailInput = document.getElementById("email");
+    let formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+    formData.append("email", emailInput.value);
+
+    let response = await fetch("/upload_resume", {
+        method: "POST",
+        body: formData
+    });
+
+    let data = await response.json();
+
+    let resultDiv = document.getElementById("result");
+
+    resultDiv.innerHTML = `
+        <h3>Skills Found:</h3>
+        <p>${(data.skills_found || []).join(", ")}</p>
+        <h3>Job Links:</h3>
+    `;
+
+    Object.values(data.job_links || {}).forEach(link => {
+    resultDiv.innerHTML += 
+    `<a href="${link}" target="_blank">${link}</a><br>`;
+    });
+
+    if (data.sent_companies && data.sent_companies.length > 0) {
+        resultDiv.innerHTML += `<h3>Resume sent to these companies:</h3>`;
+
+        data.sent_companies.forEach(company => {
+            const name = company.name || "Unknown company";
+            const url = company.apply_url || "#";
+            const status = company.status || "sent";
+
+            resultDiv.innerHTML += `
+                <p>
+                    <strong>${name}</strong> - 
+                    <a href="${url}" target="_blank">View application page</a>
+                    (status: ${status})
+                </p>
+            `;
+        });
+    }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,88 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareerMatch AI · Register</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<header class="cm-header">
+<div class="cm-header-inner">
+<div class="cm-logo">
+<span class="cm-logo-mark">CM</span>
+<span class="cm-logo-text">CareerMatch AI</span>
+</div>
+</div>
+</header>
+
+
+
+<main class="cm-main">
+
+
+<section class="cm-shell">
+
+<!-- INFO PANEL -->
+<aside class="cm-panel cm-panel-info">
+<h1 class="cm-title">Create Your Account 🚀</h1>
+<p class="cm-subtitle">
+Join CareerMatch AI and start receiving smart job matches based on your resume.
+</p>
+
+<ul class="cm-features">
+<li>Upload Resume Once</li>
+<li>80% Skill Matched Jobs</li>
+<li>Daily Job Recommendations</li>
+<li>Application Tracking</li>
+</ul>
+</aside>
+
+<!-- REGISTER FORM -->
+<section class="cm-panel cm-panel-form">
+{% if message %}
+    <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% else %}cm-alert-error{% endif %}">
+        {{ message }}
+    </div>
+{% endif %}
+<h2 class="cm-panel-title">Register</h2>
+
+<form action="/register" method="post" class="cm-form">
+
+    <div class="cm-field">
+        <label class="cm-label">Username</label>
+        <input type="text" name="name" required class="cm-input">
+    </div>
+
+    <div class="cm-field">
+        <label class="cm-label">Email</label>
+        <input type="email" name="email" required class="cm-input">
+    </div>
+
+    <div class="cm-field">
+        <label class="cm-label">Password</label>
+        <input type="password" name="password" required class="cm-input">
+    </div>
+
+    <button type="submit" class="cm-button cm-button-primary">
+        Register
+    </button>
+
+    <p class="cm-hint">
+Already have an account?
+<a href="/login">Login</a>
+</p>
+
+</form>
+
+
+
+</section>
+</main>
+
+</body>
+</html>

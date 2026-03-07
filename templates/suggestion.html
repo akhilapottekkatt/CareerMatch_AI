@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareerMatch AI · Suggestions</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<header class="cm-header">
+<div class="cm-header-inner">
+<div class="cm-logo">
+<span class="cm-logo-mark">CM</span>
+<span class="cm-logo-text">CareerMatch AI</span>
+</div>
+
+<nav class="cm-nav">
+<a href="/dashboard" class="cm-nav-link">Dashboard</a>
+<a href="/applied" class="cm-nav-link">Applied Jobs</a>
+<a href="/suggestions" class="cm-nav-link cm-nav-link-active">Suggestions</a>
+</nav>
+</div>
+</header>
+
+<main class="cm-main">
+<section class="cm-shell">
+
+<div class="cm-panel">
+<h2 class="cm-panel-title">Today's AI Job Suggestions</h2>
+
+<div id="suggestionsContainer"></div>
+
+</div>
+
+</section>
+</main>
+
+<script>
+async function loadSuggestions() {
+
+const response = await fetch("/get_suggestions");
+const jobs = await response.json();
+
+const container = document.getElementById("suggestionsContainer");
+
+if (!jobs.length){
+container.innerHTML="<p>No suggestions available yet.</p>";
+return;
+}
+
+let html="";
+
+jobs.forEach(job=>{
+html+=`
+<div class="cm-card">
+<p><strong>Date Suggested:</strong> ${job.date}</p>
+
+<div class="cm-company-main">
+<span class="cm-company-name">
+${job.role} at ${job.company}
+</span>
+<span class="cm-status-badge">
+${job.match_score}% match
+</span>
+</div>
+
+<a href="${job.apply_url}" target="_blank"
+class="cm-link">View Job</a>
+
+<br><br>
+
+<button class="cm-button cm-button-primary"
+onclick="markApplied('${job.id}')">
+Applied ✅
+</button>
+
+</div>
+`;
+});
+
+container.innerHTML=html;
+}
+
+async function markApplied(jobId){
+
+await fetch("/mark_applied/"+jobId,{
+method:"POST"
+});
+
+location.reload();
+}
+
+loadSuggestions();
+</script>
+
+</body>
+</html>

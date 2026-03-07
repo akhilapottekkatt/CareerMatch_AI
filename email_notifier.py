@@ -4,51 +4,41 @@ from email.message import EmailMessage
 from typing import List, Dict
 
 
-def _build_summary_body(
-    skills: List[str],
-    sent_companies: List[Dict[str, str]],
-    job_links: List[str],
-) -> str:
+def _build_best_jobs_body(best_companies: List[Dict[str, str]]) -> str:
     lines: List[str] = []
     lines.append("Hello from CareerMatch AI,\n")
 
-    if skills:
-        lines.append("Skills detected from your resume:")
-        lines.append(", ".join(skills))
+    if best_companies:
+        lines.append("Here are today's best matching roles for your resume:")
         lines.append("")
-
-    if sent_companies:
-        lines.append("Today we sent your resume to the following companies:")
-        for c in sent_companies:
+        for c in best_companies:
             name = c.get("name", "Unknown company")
+            role = c.get("role", "Role not specified")
             url = c.get("apply_url", "")
-            status = c.get("status", "sent")
-            if url:
-                lines.append(f"- {name} ({status}) – {url}")
-            else:
-                lines.append(f"- {name} ({status})")
-        lines.append("")
+            score = c.get("match_score")
 
-    if job_links:
-        lines.append("You can also explore more jobs using these links:")
-        for link in job_links:
-            lines.append(f"- {link}")
+            score_str = f" (match: {score}%)" if isinstance(score, int) else ""
+            if url:
+                lines.append(f"- {role} at {name}{score_str} – {url}")
+            else:
+                lines.append(f"- {role} at {name}{score_str}")
+        lines.append("")
+    else:
+        lines.append("We could not find strong matches for your resume today.")
+        lines.append("You may want to update your skills or try a different resume.")
         lines.append("")
 
     lines.append("Best regards,\nCareerMatch AI")
     return "\n".join(lines)
 
 
-def send_summary_email(
+def send_best_jobs_email(
     to_email: str,
-    skills: List[str],
-    sent_companies: List[Dict[str, str]],
-    job_links: List[str],
+    best_companies: List[Dict[str, str]],
 ) -> bool:
     """
-    Send a summary email to the user listing today's
-    companies and job links. Returns True on success,
-    False if sending fails.
+    Send an email with the best matching jobs (companies/roles).
+    Returns True on success, False if sending fails.
 
     SMTP configuration is read from environment variables:
     - EMAIL_HOST
@@ -72,8 +62,8 @@ def send_summary_email(
         # SMTP not configured; skip sending gracefully.
         return False
 
-    subject = "Today's applications from CareerMatch AI"
-    body = _build_summary_body(skills, sent_companies, job_links)
+    subject = "Today's best matching jobs from CareerMatch AI"
+    body = _build_best_jobs_body(best_companies)
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -90,6 +80,6 @@ def send_summary_email(
         return True
     except Exception as exc:
         # In a real system, you would log this exception.
-        print("Error sending summary email:", exc)
+        print("Error sending best jobs email:", exc)
         return False
 

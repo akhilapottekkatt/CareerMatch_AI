@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CareerMatch AI · Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<header class="cm-header">
+    <div class="cm-header-inner">
+        <div class="cm-logo">
+            <span class="cm-logo-mark">CM</span>
+            <span class="cm-logo-text">CareerMatch AI</span>
+        </div>
+        <nav class="cm-nav">
+            <a href="/dashboard" class="cm-nav-link cm-nav-link-active">Dashboard</a>
+            <a href="/applied" class="cm-nav-link">Applied Jobs</a>
+            <a href="/suggestions" class="cm-nav-link">Suggestions</a>
+        </nav>
+    </div>
+</header>
+
+<main class="cm-main">
+    <section class="cm-shell">
+        <aside class="cm-panel cm-panel-info">
+            <h1 class="cm-title">Smart job applications, powered by your resume.</h1>
+            <p class="cm-subtitle">
+                Upload your latest resume and let CareerMatch AI extract your skills,
+                search leading job platforms, and automatically send tailored applications
+                on your behalf.
+            </p>
+
+            <ul class="cm-features">
+                <li>Parse skills and experience from your PDF resume</li>
+                <li>Search LinkedIn, Indeed, Naukri and more</li>
+                <li>Automatically send up to 5 matching applications per day</li>
+                <li>Receive daily email summaries with companies and roles</li>
+            </ul>
+        </aside>
+
+        <section class="cm-panel cm-panel-form">
+            <h2 class="cm-panel-title">Upload resume &amp; start matching</h2>
+            <p class="cm-panel-description">
+                Provide your email so we can send you a daily summary of the companies and roles we applied to.
+            </p>
+
+            <form id="uploadForm" class="cm-form">
+                <div class="cm-field">
+                    <label for="resume" class="cm-label">Resume (PDF)</label>
+                    <input type="file" id="resume" accept="application/pdf" required class="cm-input">
+                </div>
+
+                <div class="cm-field">
+                    <label for="email" class="cm-label">Notification email</label>
+                    <input type="email" id="email" placeholder="you@example.com" required class="cm-input">
+                </div>
+
+                <button type="submit" class="cm-button cm-button-primary">
+                    Upload &amp; Find Matching Jobs
+                </button>
+
+                <p class="cm-hint">
+                    We never share your resume or email with third parties without your consent.
+                </p>
+            </form>
+
+            <section id="result" class="cm-results cm-results-empty">
+                <p class="cm-placeholder">
+                    Results will appear here after you upload your resume.
+                </p>
+            </section>
+        </section>
+    </section>
+</main>
+
+<script>
+let lastSkills = [];
+let lastEmail = "";
+
+document.getElementById("uploadForm")
+.addEventListener("submit", async function(e){
+    e.preventDefault();
+
+    const fileInput = document.getElementById("resume");
+    const emailInput = document.getElementById("email");
+    const resultDiv = document.getElementById("result");
+
+    if (!fileInput.files.length) {
+        alert("Please choose a resume file first.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+    formData.append("email", emailInput.value);
+
+    resultDiv.classList.remove("cm-results-empty");
+    resultDiv.innerHTML = `
+        <div class="cm-loading">
+            <div class="cm-spinner"></div>
+            <p>Analyzing your resume and fetching matching jobs...</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch("/upload_resume", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            resultDiv.innerHTML = `
+                <div class="cm-error">
+                    <h3>Something went wrong</h3>
+                    <p>We couldn't process your resume. Please try again.</p>
+                </div>
+            `;
+            console.error("Upload error:", errorText);
+            return;
+        }
+
+        const data = await response.json();
+
+        lastSkills = data.skills_found || [];
+        lastEmail = emailInput.value || "";
+
+        const best = data.best_matches || [];
+
+        let html = "";
+
+        html += `
+            <div class="cm-card">
+                <h3>Best matching jobs for this resume</h3>
+                ${
+                    best.length
+                        ? `<ul class="cm-company-list">
+                            ${best.map(job => `
+                                <li class="cm-company-item">
+                                    <div class="cm-company-main">
+                                        <span class="cm-company-name">${job.role || "Role not specified"} at ${job.name || "Unknown company"}</span>
+                                        ${job.match_score ? `<span class="cm-status-badge">${job.match_score}% match</span>` : ""}
+                                    </div>
+                                    ${job.apply_url ? `<a href="${job.apply_url}" target="_blank" class="cm-link">View job posting</a>` : ""}
+                                </li>
+                            `).join("")}
+                        </ul>`
+                        : `<p class="cm-placeholder">We couldn't find strong matches (80%+ skill fit) for this resume.</p>`
+                }
+            </div>
+        `;
+
+        if (best.length) {
+            html += `
+                <button type="button" id="sendBestButton" class="cm-button cm-button-secondary">
+                    Email me these best matches
+                </button>
+                <p class="cm-hint">
+                    We will send up to 5 of the strongest matches based on your resume to your inbox.
+                </p>
+            `;
+        }
+
+        resultDiv.innerHTML = html;
+
+        const sendBtn = document.getElementById("sendBestButton");
+        if (sendBtn) {
+            sendBtn.addEventListener("click", async () => {
+                if (!lastEmail || !lastSkills.length) {
+                    alert("Please upload your resume again before requesting email matches.");
+                    return;
+                }
+
+                sendBtn.disabled = true;
+                sendBtn.textContent = "Sending best matches...";
+
+                try {
+                    const resp = await fetch("/send_best_matches", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            email: lastEmail,
+                            skills: lastSkills,
+                        }),
+                    });
+
+                    const result = await resp.json();
+                    if (result.sent) {
+                        sendBtn.textContent = "Best matches sent to your email";
+                    } else {
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = "Email me these best matches";
+                        alert("We couldn't send the email. Please check your email configuration or try again later.");
+                    }
+                } catch (err) {
+                    console.error("Error sending best matches:", err);
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = "Email me these best matches";
+                    alert("Unexpected error while sending email. Please try again.");
+                }
+            });
+        }
+    } catch (err) {
+        console.error("Unexpected error:", err);
+        resultDiv.innerHTML = `
+            <div class="cm-error">
+                <h3>Unexpected error</h3>
+                <p>Please check your internet connection and try again.</p>
+            </div>
+        `;
+    }
+});
+</script>
+
+</body>
+</html>
+

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareerMatch AI · Applied Jobs</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<header class="cm-header">
+<div class="cm-header-inner">
+<div class="cm-logo">
+<span class="cm-logo-mark">CM</span>
+<span class="cm-logo-text">CareerMatch AI</span>
+</div>
+
+<nav class="cm-nav">
+<a href="/dashboard" class="cm-nav-link">Dashboard</a>
+<a href="/applied" class="cm-nav-link cm-nav-link-active">Applied Jobs</a>
+<a href="/suggestions" class="cm-nav-link">Suggestions</a>
+</nav>
+</div>
+</header>
+
+<main class="cm-main">
+<section class="cm-shell">
+
+<div class="cm-panel">
+<h2 class="cm-panel-title">Applied Jobs</h2>
+
+<div id="appliedContainer"></div>
+
+</div>
+
+</section>
+</main>
+
+<script>
+
+async function loadApplied(){
+
+const response = await fetch("/get_applied");
+const jobs = await response.json();
+
+const container=document.getElementById("appliedContainer");
+
+if(!jobs.length){
+container.innerHTML="<p>No applied jobs yet.</p>";
+return;
+}
+
+let html="";
+
+jobs.forEach(job=>{
+html+=`
+<div class="cm-card">
+
+<p><strong>Applied Date:</strong> ${job.applied_date}</p>
+
+<div class="cm-company-main">
+<span class="cm-company-name">
+${job.role} at ${job.company}
+</span>
+</div>
+
+<a href="${job.apply_url}"
+target="_blank"
+class="cm-link">
+View Job
+</a>
+
+</div>
+`;
+});
+
+container.innerHTML=html;
+}
+
+loadApplied();
+
+</script>
+
+</body>
+</html>

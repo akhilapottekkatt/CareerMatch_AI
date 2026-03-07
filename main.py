@@ -1,93 +1,165 @@
-# from fastapi import FastAPI, File, UploadFile
-# import shutil
-# import os
-
-# app = FastAPI()
-
-# UPLOAD_FOLDER = "uploads"
-
-# # Create uploads folder if not exist
-# if not os.path.exists(UPLOAD_FOLDER):
-#     os.makedirs(UPLOAD_FOLDER)
 
 
-# @app.get("/")
-# def home():
-#     return {"message": "CareerMatch_AI Server is running!"}
 
-
-# @app.post("/upload_resume")
-# async def upload_resume(file: UploadFile = File(...)):
-#     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-
-#     with open(file_path, "wb") as buffer:
-#         shutil.copyfileobj(file.file, buffer)
-
-#     return {"filename": file.filename, "status": "Uploaded Successfully"}
-
-
-from fastapi import FastAPI, File, UploadFile, Request, Form
-import shutil
-import os
-from job_links import generate_job_links
-from resume_parser import extract_text_from_pdf, extract_skills
-from fastapi.responses import HTMLResponse
+import json
+from fastapi import FastAPI, Request, Form, UploadFile, File, Depends, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
-from company_matcher import match_companies, send_resume_to_companies
-from email_notifier import send_summary_email
+from sqlalchemy.orm import Session
+from database import create_users_table, engine, SessionLocal,get_db
+from models import Base, User, Resume
+from auth import create_user, authenticate_user
+import os
+import shutil
+from openai import OpenAI
+from resume_extracter import extract_text
+from resume_parser import parse_resume
+
+
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-templates = Jinja2Templates(directory="templates")
 
+app.add_middleware(SessionMiddleware, secret_key="supersecretkey")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-UPLOAD_FOLDER = "uploads"
-
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+templates = Jinja2Templates(directory="templates")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+# Create table on startup
+create_users_table()
+
+
+# ---------------- REGISTER ----------------
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    message = request.session.pop("message", None)
+    msg_type = request.session.pop("msg_type", None)
+    return templates.TemplateResponse("register.html", {"request": request, "message": message, "msg_type": msg_type})
+
+
+@app.post("/register")
+def register_user(request: Request,
+                  name: str = Form(...),
+                  email: str = Form(...),
+                  password: str = Form(...)):
+    
+    success = create_user(name,email,password)
+
+    if not success:
+        request.session["message"] = "Email already registered"
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/register", status_code=status.HTTP_303_SEE_OTHER)
+
+    request.session["message"] = "Registration successful ! Please login"
+    request.session["msg_type"] = "success"
+    return RedirectResponse("/login", status_code= status.HTTP_303_SEE_OTHER)
+
+
+# ---------------- LOGIN ----------------
+@app.get("/")
+def home():
+    return RedirectResponse("/login")
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    message = request.session.pop("message", None)
+    msg_type = request.session.pop("msg_type", None)
+    return templates.TemplateResponse("login.html", {"request": request,
+                                            "message": message,
+                                            "msg_type": msg_type 
+                                        })
+
+
+@app.post("/login")
+def login_user(request: Request,
+               email: str = Form(...),
+               password: str = Form(...)):
+
+    user = authenticate_user(email, password)
+
+    if user:
+        request.session["user"] = user
+        request.session["message"] = "Login successful!"
+        request.session["msg_type"] = "success"
+        return RedirectResponse("/dashboard", status_code=303)
+    request.session["message"] = "Invalid email or password "
+    request.session["msg_type"] = "error"
+    return RedirectResponse("/login", status_code=303)
+
+
+# ---------------- DASHBOARD ----------------
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+
+    if "user" not in request.session:
+        return RedirectResponse("/login", status_code=303)
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "user": request.session["user"]}
+    )
+
+
+# ---------------- LOGOUT ----------------
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=303)
 
 
 @app.post("/upload_resume")
-async def upload_resume(
-    email: str = Form(...),
+def upload_resume(
+    request: Request,
     file: UploadFile = File(...),
+    db: Session = Depends(get_db)
 ):
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    print("Upload route called")
+
+    if "user" not in request.session:
+        return RedirectResponse("/login", status_code=303)
+
+    email = request.session["user"]
+    user = db.query(User).filter(User.email == email).first()
+
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    # Save file
+    file_path = os.path.join("uploads", file.filename)
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Extract resume text and detected skills
-    resume_text = extract_text_from_pdf(file_path)
-    skills = extract_skills(resume_text)
+    # Extract text
+    resume_text = extract_text(file_path)
 
-    # Generate job search links based on detected skills
-    job_links = generate_job_links(skills)
+    # AI Parse
+    parsed_data = parse_resume(resume_text)
 
-    # Find up to 5 companies related to the detected skills
-    matched_companies = match_companies(skills, limit=5)
+    print("Parsed Data:", parsed_data)
 
-    # "Send" resume to those companies (stub implementation)
-    sent_companies = send_resume_to_companies(file_path, matched_companies)
+    # Save parsed data to JSON file
+    with open("parsed_resumes.json", "w") as f:
+        json.dump(parsed_data, f, indent=4)
 
-    # Notify the user by email with today's companies and job links
-    send_summary_email(
-        to_email=email,
-        skills=skills,
-        sent_companies=sent_companies,
-        job_links=job_links,
+    # Store in Database
+    resume = Resume(
+        user_id=user.id,
+        file_path=file_path,
+        role=parsed_data.get("role", ""),
+        experience=parsed_data.get("experience", ""),
+        summary=parsed_data.get("summary", "")
     )
 
-    return {
-        "filename": file.filename,
-        "skills_found": skills,
-        "job_links": job_links,
-        "sent_companies": sent_companies,
-    }
+    db.add(resume)
+    db.commit()
+
+    return {"message": "Resume uploaded successfully"}

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Job Recommendations</title></head>
+<body>
+    <h1>Top 5 Job Matches ({{ matches|length }})</h1>
+    {% for match in matches %}
+    <div style="border:1px solid #ccc; margin:10px; padding:15px;">
+        <h3>{{ match.job.title }}</h3>
+        <p><strong>Company:</strong> {{ match.job.company }} | <strong>Location:</strong> {{ match.job.location }}</p>
+        <p><strong>Match Score:</strong> {{ match.match_score }} ({{ match.similarity|round(3) }})</p>
+        <p>{{ match.job.description[:200] }}...</p>
+        <a href="{{ match.job.link }}" target="_blank">Apply on Indeed</a>
+    </div>
+    {% endfor %}
+    <a href="/dashboard">← Back to Dashboard</a>
+</body>
+</html>
+

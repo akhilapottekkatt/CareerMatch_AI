@@ -16,9 +16,350 @@
             <span class="cm-logo-text">CareerMatch AI</span>
         </div>
         <nav class="cm-nav">
+            <a href="/dashboard"   class="cm-nav-link cm-nav-link-active">Dashboard</a>
+            <a href="/applied"     class="cm-nav-link">Applied Jobs</a>
+            <a href="/suggestions" class="cm-nav-link">Suggestions</a>
+            <a href="/logout"      class="cm-nav-link">Logout</a>
+        </nav>
+    </div>
+</header>
+
+<main class="cm-main">
+    <section class="cm-shell">
+
+        <!-- LEFT PANEL — always same -->
+        <aside class="cm-panel cm-panel-info">
+            <h1 class="cm-title">Smart job applications, powered by your resume.</h1>
+            <p class="cm-subtitle">
+                Upload your latest resume and let CareerMatch AI extract your skills,
+                search leading job platforms, and automatically send tailored applications
+                on your behalf.
+            </p>
+            <ul class="cm-features">
+                <li>Parse skills and experience from your PDF resume</li>
+                <li>Search LinkedIn, Indeed, Naukri and more</li>
+                <li>Automatically send up to 5 matching applications per day</li>
+                <li>Receive daily email summaries with companies and roles</li>
+            </ul>
+        </aside>
+
+        <!-- RIGHT PANEL — changes based on resume status -->
+        <section class="cm-panel cm-panel-form">
+
+            {% if has_resume and resume %}
+            <!-- ════ RESUME ALREADY ON FILE ════ -->
+
+            <h2 class="cm-panel-title">Your resume is on file ✅</h2>
+            <p class="cm-panel-description">
+                We've already parsed your resume. No need to upload again!
+            </p>
+
+            <!-- Resume summary card -->
+            <div class="cm-card" style="margin-bottom: 20px;">
+                <div class="cm-company-main" style="margin-bottom: 12px;">
+                    <span class="cm-company-name">{{ resume.name }}</span>
+                    <span class="cm-status-badge">{{ resume.uploaded_at }}</span>
+                </div>
+
+                <p style="color: var(--cm-muted); font-size: 0.85rem; margin-bottom: 12px;">
+                    {{ resume.role }}
+                </p>
+
+                {% if resume.skills %}
+                <div style="margin-bottom: 8px;">
+                    {% for skill in resume.skills %}
+                    <span class="cm-status-badge" style="margin: 2px;">{{ skill }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            <a href="/suggestions" class="cm-button cm-button-primary" style="display:block; text-align:center; margin-bottom:12px; text-decoration:none;">
+                🔍 View My Job Suggestions →
+            </a>
+
+            <button type="button" class="cm-button cm-button-secondary"
+                    onclick="document.getElementById('updateSection').style.display='block'; this.style.display='none';">
+                🔄 Update Resume
+            </button>
+
+            <button type="button" class="cm-button cm-button-secondary"
+                    onclick="deleteResume()"
+                    style="margin-top: 8px; background: #fee2e2; color: #dc2626; border-color: #fecaca;">
+                🗑️ Delete Resume
+            </button>
+
+            <!-- Hidden update form — shown when Update clicked -->
+            <div id="updateSection" style="display:none; margin-top: 24px;">
+                <hr style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 8px;">Upload New Resume</h3>
+                <p class="cm-hint">⚠️ This replaces your current resume and generates fresh job suggestions.</p>
+
+                <form id="updateForm" class="cm-form" style="margin-top: 12px;">
+                    <div class="cm-field">
+                        <label class="cm-label">New Resume (PDF)</label>
+                        <input type="file" id="updateFile" accept="application/pdf" required class="cm-input">
+                    </div>
+                    <button type="submit" class="cm-button cm-button-primary">
+                        Upload &amp; Refresh Suggestions
+                    </button>
+                </form>
+
+                <div id="updateProgress" style="display:none; margin-top:12px;">
+                    <div class="cm-loading">
+                        <div class="cm-spinner"></div>
+                        <p id="updateProgressText">Uploading your new resume…</p>
+                    </div>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- ════ NO RESUME YET — SHOW UPLOAD FORM ════ -->
+
+            <h2 class="cm-panel-title">Upload resume &amp; start matching</h2>
+            <p class="cm-panel-description">
+                Provide your email so we can send you a daily summary of the companies and roles we applied to.
+            </p>
+
+            <form id="uploadForm" class="cm-form">
+                <div class="cm-field">
+                    <label for="resume" class="cm-label">Resume (PDF)</label>
+                    <input type="file" id="resume" accept="application/pdf" required class="cm-input">
+                </div>
+
+                <div class="cm-field">
+                    <label for="email" class="cm-label">Notification email</label>
+                    <input type="email" id="email" placeholder="you@example.com" required class="cm-input">
+                </div>
+
+                <button type="submit" class="cm-button cm-button-primary">
+                    Upload &amp; Find Matching Jobs
+                </button>
+
+                <p class="cm-hint">
+                    We never share your resume or email with third parties without your consent.
+                </p>
+            </form>
+
+            <section id="result" class="cm-results cm-results-empty">
+                <p class="cm-placeholder">
+                    Results will appear here after you upload your resume.
+                </p>
+            </section>
+
+            {% endif %}
+
+        </section>
+    </section>
+</main>
+
+<script>
+let lastSkills = [];
+let lastEmail  = "";
+
+const uploadSteps = [
+    "Extracting text from your resume…",
+    "Sending to Gemini AI for parsing…",
+    "Identifying your skills and experience…",
+    "Scraping jobs from LinkedIn, Indeed, Naukri…",
+    "Running BERT semantic matching…",
+    "Saving your top 5 matched jobs…"
+];
+
+// ── FIRST TIME UPLOAD ────────────────────────────────────────────
+const uploadForm = document.getElementById("uploadForm");
+if (uploadForm) {
+    uploadForm.addEventListener("submit", async function(e) {
+        e.preventDefault();
+
+        const fileInput  = document.getElementById("resume");
+        const emailInput = document.getElementById("email");
+        const resultDiv  = document.getElementById("result");
+
+        if (!fileInput.files.length) {
+            alert("Please choose a resume file first.");
+            return;
+        }
+
+        resultDiv.classList.remove("cm-results-empty");
+        resultDiv.innerHTML = `
+            <div class="cm-loading">
+                <div class="cm-spinner"></div>
+                <p id="progressText">Analyzing your resume…</p>
+            </div>`;
+
+        // Cycle progress messages
+        let step = 0;
+        const timer = setInterval(() => {
+            const el = document.getElementById("progressText");
+            if (el && step < uploadSteps.length - 1) {
+                step++;
+                el.textContent = uploadSteps[step];
+            }
+        }, 3500);
+
+        const formData = new FormData();
+        formData.append("file",   fileInput.files[0]);
+        formData.append("email",  emailInput.value);
+        formData.append("update", "false");
+
+        try {
+            const response = await fetch("/upload_resume", { method: "POST", body: formData });
+            clearInterval(timer);
+
+            if (!response.ok) {
+                resultDiv.innerHTML = `<div class="cm-error"><h3>Something went wrong</h3><p>Please try again.</p></div>`;
+                return;
+            }
+
+            const data = await response.json();
+
+            // If resume already exists — redirect to suggestions
+            if (data.already_exists) {
+                window.location.href = "/suggestions";
+                return;
+            }
+
+            lastSkills = data.skills_found || [];
+            lastEmail  = emailInput.value  || "";
+            const best = data.best_matches || [];
+
+            let html = `
+                <div class="cm-card">
+                    <h3>Best matching jobs for your resume</h3>
+                    ${best.length
+                        ? `<ul class="cm-company-list">
+                            ${best.map(job => `
+                                <li class="cm-company-item">
+                                    <div class="cm-company-main">
+                                        <span class="cm-company-name">${job.role || "Role"} at ${job.name || "Company"}</span>
+                                        ${job.match_score ? `<span class="cm-status-badge">${job.match_score}% match</span>` : ""}
+                                    </div>
+                                    ${job.apply_url ? `<a href="${job.apply_url}" target="_blank" class="cm-link">View job posting</a>` : ""}
+                                </li>`).join("")}
+                           </ul>`
+                        : `<p class="cm-placeholder">No strong matches found. Try again later.</p>`
+                    }
+                </div>`;
+
+            if (best.length) {
+                html += `
+                    <a href="/suggestions" class="cm-button cm-button-primary" style="display:block; text-align:center; text-decoration:none; margin-bottom:10px;">
+                        View All Suggestions →
+                    </a>
+                    <button type="button" id="sendBestButton" class="cm-button cm-button-secondary">
+                        Email me these best matches
+                    </button>
+                    <p class="cm-hint">We'll send up to 5 strongest matches to your inbox.</p>`;
+            }
+
+            resultDiv.innerHTML = html;
+
+            // Wire email button
+            const sendBtn = document.getElementById("sendBestButton");
+            if (sendBtn) {
+                sendBtn.addEventListener("click", async () => {
+                    sendBtn.disabled     = true;
+                    sendBtn.textContent  = "Sending…";
+                    try {
+                        const resp   = await fetch("/send_best_matches", {
+                            method:  "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body:    JSON.stringify({ email: lastEmail, skills: lastSkills })
+                        });
+                        const result = await resp.json();
+                        sendBtn.textContent = result.sent ? "Sent to your email ✅" : "Failed — try again";
+                        if (!result.sent) sendBtn.disabled = false;
+                    } catch {
+                        sendBtn.disabled    = false;
+                        sendBtn.textContent = "Email me these best matches";
+                    }
+                });
+            }
+
+        } catch (err) {
+            clearInterval(timer);
+            resultDiv.innerHTML = `<div class="cm-error"><h3>Unexpected error</h3><p>Check your connection and try again.</p></div>`;
+        }
+    });
+}
+
+// ── UPDATE RESUME ────────────────────────────────────────────────
+const updateForm = document.getElementById("updateForm");
+if (updateForm) {
+    updateForm.addEventListener("submit", async function(e) {
+        e.preventDefault();
+
+        const fileInput = document.getElementById("updateFile");
+        if (!fileInput.files.length) {
+            alert("Please choose a resume file.");
+            return;
+        }
+
+        document.getElementById("updateForm").style.display     = "none";
+        document.getElementById("updateProgress").style.display = "block";
+
+        let step = 0;
+        const ptxt  = document.getElementById("updateProgressText");
+        const timer = setInterval(() => {
+            if (step < uploadSteps.length - 1) { step++; ptxt.textContent = uploadSteps[step]; }
+        }, 3500);
+
+        const formData = new FormData();
+        formData.append("file",   fileInput.files[0]);
+        formData.append("update", "true");
+
+        try {
+            const resp = await fetch("/upload_resume", { method: "POST", body: formData });
+            clearInterval(timer);
+            const data = await resp.json();
+            // After update always go to fresh suggestions
+            window.location.href = "/suggestions";
+        } catch {
+            clearInterval(timer);
+            alert("Update failed. Please try again.");
+            window.location.reload();
+        }
+    });
+}
+
+// ── DELETE RESUME ────────────────────────────────────────────────
+async function deleteResume() {
+    if (!confirm("Delete your resume? You'll need to upload again to get suggestions.")) return;
+    const resp = await fetch("/delete_resume", { method: "POST" });
+    const data = await resp.json();
+    if (data.success) window.location.reload();
+    else alert("Failed to delete. Try again.");
+}
+</script>
+
+</body>
+</html>
+
+
+{% comment %} <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CareerMatch AI · Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+<header class="cm-header">
+    <div class="cm-header-inner">
+        <div class="cm-logo">
+            <span class="cm-logo-mark">CM</span>
+            <span class="cm-logo-text">CareerMatch AI</span>
+        </div>
+        <nav class="cm-nav">
             <a href="/dashboard" class="cm-nav-link cm-nav-link-active">Dashboard</a>
             <a href="/applied" class="cm-nav-link">Applied Jobs</a>
             <a href="/suggestions" class="cm-nav-link">Suggestions</a>
+            <a href="/logout"      class="cm-nav-link">Logout</a>
         </nav>
     </div>
 </header>
@@ -220,3 +561,5 @@ document.getElementById("uploadForm")
 </body>
 </html>
 
+
+ {% endcomment %}

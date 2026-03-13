@@ -1,11 +1,10 @@
-# Virtual environment
 venv/
 __pycache__/
 *.pyc
-
-# Environment variables
+*.db
+uploads/
 .env
-
-# OS files
-.DS_Store
-
+.env.save
+parsed_resumes*.json
+resume_cache.json
+naukri_debug.png

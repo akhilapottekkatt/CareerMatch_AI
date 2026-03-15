@@ -267,8 +267,83 @@ def upload_resume(
         from models import match_jobs_to_resume
         from job_links import scrape_all_jobs
 
-        query = " ".join(skills_list[:3]) if skills_list else "software developer"
-        print(f"🔍 Searching jobs for: '{query}'")
+        GENERIC_SKILLS = {
+            'css', 'html', 'linux', 'jupyter', 'github', 'git', 'power bi',
+            'microsoft office', 'excel', 'word', 'powerpoint', 'communication',
+            'teamwork', 'leadership', 'problem solving', 'ms office', 'windows',
+            'agile', 'scrum', 'jira', 'confluence', 'slack', 'zoom'
+        }
+
+        ROLE_KEYWORDS = {
+            'python': 'Python Developer',
+            'django': 'Python Django Developer',
+            'fastapi': 'Python Backend Developer',
+            'react': 'React Frontend Developer',
+            'node': 'Node.js Developer',
+            'java': 'Java Developer',
+            'spring': 'Java Spring Developer',
+            'machine learning': 'Machine Learning Engineer',
+            'ml': 'Machine Learning Engineer',
+            'deep learning': 'Deep Learning Engineer',
+            'nlp': 'NLP Engineer',
+            'data science': 'Data Scientist',
+            'tensorflow': 'Deep Learning Engineer',
+            'pytorch': 'ML Engineer',
+            'flutter': 'Flutter Developer',
+            'android': 'Android Developer',
+            'ios': 'iOS Developer',
+            'devops': 'DevOps Engineer',
+            'docker': 'DevOps Engineer',
+            'kubernetes': 'DevOps Engineer',
+            'aws': 'Cloud Engineer',
+            'azure': 'Cloud Developer',
+            'sql': 'Database Developer',
+            'mongodb': 'Backend Developer',
+            'opencv': 'Computer Vision Engineer',
+            'keras': 'Deep Learning Engineer',
+            'data analyst': 'Data Analyst',
+            'tableau': 'Data Analyst',
+        }
+        def build_job_query(skills: list, summary: str = "") -> str:
+            """
+            Build a smart, role-based job search query from resume skills.
+            Priority: summary role > tech skill mapping > top tech skills
+            """
+        skills_lower = [s.lower() for s in skills]
+
+        # Priority 1: Check summary for explicit role mention
+        summary_lower = summary.lower()
+        role_hints = ['developer', 'engineer', 'analyst', 'scientist', 
+                    'designer', 'architect', 'manager', 'intern']
+        for hint in role_hints:
+            if hint in summary_lower:
+                # Extract role phrase from summary (first 6 words)
+                words = summary_lower.split()
+                idx = words.index(hint) if hint in words else -1
+                if idx >= 0:
+                    role_phrase = " ".join(words[max(0, idx-2):idx+1]).title()
+                    print(f"🎯 Query from summary: '{role_phrase}'")
+                    return role_phrase
+
+        # Priority 2: Map known tech skills to job role
+        for skill in skills_lower:
+            if skill in ROLE_KEYWORDS:
+                role = ROLE_KEYWORDS[skill]
+                print(f"🎯 Query from skill mapping: '{role}'")
+                return role
+
+    # Priority 3: Filter generic skills, use top 3 tech skills
+        tech = [s for s in skills if s.lower() not in GENERIC_SKILLS]
+        if tech:
+            query = " ".join(tech[:3]) + " Developer"
+            print(f"🎯 Query from tech skills: '{query}'")
+            return query
+
+        # Fallback
+        print("🎯 Query: fallback 'Software Developer'")
+        return "Software Developer"
+    
+        query = build_job_query(skills_list, summary)
 
         jobs = scrape_all_jobs(query, location="India")
         print(f"📦 Total scraped: {len(jobs)}")

@@ -42,7 +42,7 @@ def scrape_jsearch(query: str, location: str = "India", num_pages: int = 2) -> l
         }
         try:
             print(f"🔍 JSearch page {page}: '{query}' in {location}")
-            resp = requests.get(url, headers=headers, params=params, timeout=15)
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
 
             if resp.status_code == 403:
                 print("❌ JSearch 403 — Not subscribed. Visit:")
@@ -64,9 +64,12 @@ def scrape_jsearch(query: str, location: str = "India", num_pages: int = 2) -> l
 
             for job in data:
                 apply_link = job.get("job_apply_link", "")
-                platform = "LinkedIn" if "linkedin" in apply_link.lower() else \
-                           "Indeed"   if "indeed"   in apply_link.lower() else \
-                           "JSearch"
+                platform = "LinkedIn"     if "linkedin"          in apply_link.lower() else \
+                           "Indeed"      if "indeed"            in apply_link.lower() else \
+                           "Naukri"      if "naukri"            in apply_link.lower() else \
+                           "Glassdoor"   if "glassdoor"         in apply_link.lower() else \
+                           "Google Jobs" if "google_jobs_apply" in apply_link.lower() else \
+                           "Company Site"
                 jobs.append({
                     "title":       job.get("job_title", ""),
                     "company":     job.get("employer_name", ""),

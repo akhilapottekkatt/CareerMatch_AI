@@ -1,20 +1,17 @@
 import pdfplumber
-import docx
 
-def extract_text(file_path):
-
-    if file_path.endswith(".pdf"):
-        text = ""
-
+def extract_text(file_path: str) -> str:
+    """Extract text from PDF using pdfplumber."""
+    text = ""
+    try:
         with pdfplumber.open(file_path) as pdf:
             for page in pdf.pages:
-                text += page.extract_text()
+                page_text = page.extract_text()
+                if page_text:  # ← skip None pages
+                    text += page_text + "\n"
+    except Exception as e:
+        print(f"❌ PDF extraction error: {e}")
+        return ""
 
-        return text
-
-    elif file_path.endswith(".docx"):
-
-        doc = docx.Document(file_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
-
-        return text
+    print(f"✅ Extracted {len(text)} characters from PDF")
+    return text.strip()

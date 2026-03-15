@@ -22,8 +22,8 @@ a {
     top: 0;
     z-index: 10;
     backdrop-filter: blur(10px);
-    background: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.7));
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    background: linear-gradient(to right, rgba(4, 199, 150, 0.9), rgba(176, 56, 212, 0.7));
+    border-bottom: 1px solid rgba(219, 14, 14, 0.2);
 }
 
 .cm-header-inner {
@@ -102,7 +102,7 @@ a {
 }
 
 .cm-auth-panel {
-    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.09), rgba(15, 23, 42, 0.98));
+    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.09), rgba(33, 184, 91, 0.98));
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -222,7 +222,7 @@ a {
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #9ca3af;
+    color: #000000;
 }
 
 .cm-input {
@@ -517,4 +517,104 @@ a {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* ── ADD THIS TO THE BOTTOM OF YOUR style.css ── */
+
+/* ===============================
+   JOB CARDS — applied.html & suggestions.html
+================================ */
+
+.job-card {
+    border-radius: 0.9rem;
+    background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.09), rgba(15, 23, 42, 0.98));
+    border: 1px solid rgba(30, 64, 175, 0.65);
+    padding: 1rem 1.2rem;
+    margin-bottom: 0.85rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.job-card:hover {
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.2);
+    
+}
+
+.job-header {
+    display: flex;
+    align-items: flex-start;
+    color: #e5e7eb;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Job role/title — bright white, prominent */
+.job-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #46660a;
+    margin-bottom: 0.3rem;
+}
+
+/* Company, platform, date — muted grey */
+.job-company {
+    font-size: 0.82rem;
+    color: #19b43b;
+}
+
+/* ✅ applied badge — green */
+.status-badge {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0.2rem 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    background: rgba(22, 163, 74, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(22, 163, 74, 0.5);
+}
+
+/* Match score badge — blue */
+.match-badge {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0.2rem 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(37, 99, 235, 0.18);
+    color: #93c5fd;
+    border: 1px solid rgba(37, 99, 235, 0.5);
+}
+
+/* View Job button */
+.btn-view {
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(37, 99, 235, 0.2);
+    color: #93c5fd;
+    border: 1px solid rgba(37, 99, 235, 0.5);
+    text-decoration: none;
+    
+}
+
+.btn-view:hover {
+    background: rgba(37, 99, 235, 0.4);
+    color: #e5e7eb;
+}
+
+/* Empty state */
+.cm-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #9ca3af;
+}
+
+.cm-empty h3 {
+    color: #e5e7eb;
 }

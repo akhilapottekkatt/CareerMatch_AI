@@ -1,128 +1,182 @@
-from typing import List, Dict, Any
+# company_matcher.py
+"""
+Fetches real jobs from multiple sources and computes
+a real match score for each job against candidate skills.
+"""
+from job_links import scrape_jsearch, scrape_remoteok
 
 
-# Very simple in-memory "company database".
-# In a real system, this would come from a database or an API.
-COMPANY_DATABASE: List[Dict[str, Any]] = [
-    {
-        "name": "TechSoft Solutions",
-        "role": "Backend Engineer (Python/FastAPI)",
-        "skills": ["python", "django", "fastapi", "machine learning"],
-        "apply_url": "https://careers.techsoft.example/jobs/search?query=python",
-    },
-    {
-        "name": "CloudNova",
-        "role": "Cloud DevOps Engineer",
-        "skills": ["aws", "azure", "docker", "linux"],
-        "apply_url": "https://jobs.cloudnova.example/search?type=cloud",
-    },
-    {
-        "name": "DataSphere Analytics",
-        "role": "Data Scientist",
-        "skills": ["sql", "data science", "machine learning"],
-        "apply_url": "https://careers.datasphere.example/jobs?query=data",
-    },
-    {
-        "name": "WebCraft Studios",
-        "role": "Frontend Engineer",
-        "skills": ["html", "css", "javascript"],
-        "apply_url": "https://jobs.webcraft.example/open-roles/frontend",
-    },
-    {
-        "name": "DevOpsWorks",
-        "role": "DevOps Engineer",
-        "skills": ["linux", "docker", "aws", "git", "github"],
-        "apply_url": "https://devopsworks.example/careers",
-    },
-    {
-        "name": "AI Labs",
-        "role": "Machine Learning Engineer",
-        "skills": ["python", "machine learning", "data science"],
-        "apply_url": "https://ailabs.example/jobs",
-    },
-]
+# ═══════════════════════════════════════════════════════════════════
+# MATCH SCORE — compares job vs candidate skills
+# ═══════════════════════════════════════════════════════════════════
 
-
-def get_best_matching_companies(
-    skills: List[str],
-    limit: int = 5,
-    min_match_ratio: float = 0.8,
-) -> List[Dict[str, Any]]:
+def compute_match_score(job: dict, skills: list) -> float:
     """
-    Return up to `limit` companies whose required skills match
-    at least `min_match_ratio` (e.g. 0.8 = 80%) of the company's
-    required skills.
+    Compare job title + description against candidate skills.
+    Returns score between 0.0 and 1.0
     """
-    resume_skills = {s.lower() for s in skills}
-    ranked: List[Dict[str, Any]] = []
+    if not skills:
+        return 0.0
 
-    for company in COMPANY_DATABASE:
-        company_skills = {s.lower() for s in company.get("skills", [])}
-        if not company_skills:
-            continue
+    job_text = (
+        job.get("title", "") + " " +
+        job.get("description", "") + " " +
+        job.get("company", "")
+    ).lower()
 
-        overlap = resume_skills.intersection(company_skills)
-        match_ratio = len(overlap) / len(company_skills)
-
-        if match_ratio >= min_match_ratio:
-            ranked.append(
-                {
-                    "name": company["name"],
-                    "role": company.get("role", ""),
-                    "apply_url": company["apply_url"],
-                    "match_score": int(match_ratio * 100),
-                }
-            )
-
-    ranked.sort(key=lambda c: c.get("match_score", 0), reverse=True)
-    return ranked[:limit]
+    matched = sum(1 for skill in skills if skill.lower() in job_text)
+    score   = matched / len(skills)
+    return round(min(score, 1.0), 2)
 
 
-def match_companies(skills: List[str], limit: int = 5) -> List[Dict[str, str]]:
+# ═══════════════════════════════════════════════════════════════════
+# QUERY BUILDER — builds multiple smart queries from skills
+# ═══════════════════════════════════════════════════════════════════
+
+def build_queries(skills: list) -> list:
     """
-    Backwards-compatible helper used in older parts of the code.
-    Simply returns up to `limit` companies that share at least
-    one skill with the resume (no 80% filter).
+    Build multiple search queries from skills so we
+    don't miss jobs by using only 1-2 keywords.
+
+    Example:
+      skills = [Python, Django, React, AWS, Docker]
+      queries = [
+        "Python Django Developer",
+        "React Frontend Developer",
+        "AWS Docker DevOps",
+        "Python Developer",
+      ]
     """
-    resume_skills = {s.lower() for s in skills}
-    matched: List[Dict[str, str]] = []
+    # Categorize skills
+    languages   = []
+    frameworks  = []
+    cloud_devops = []
+    data_ml     = []
+    other       = []
 
-    for company in COMPANY_DATABASE:
-        company_skills = {s.lower() for s in company.get("skills", [])}
-        if resume_skills.intersection(company_skills):
-            matched.append(
-                {
-                    "name": company["name"],
-                    "apply_url": company["apply_url"],
-                }
-            )
+    lang_keywords    = {"python","java","javascript","typescript","c++","c#","ruby","php","swift","kotlin","go","rust","scala","r","dart"}
+    framework_kw     = {"django","flask","fastapi","react","angular","vue","nextjs","nodejs","express","spring","laravel"}
+    cloud_kw         = {"aws","azure","gcp","docker","kubernetes","terraform","ansible","devops","jenkins","ci/cd","linux"}
+    data_kw          = {"machine learning","deep learning","tensorflow","pytorch","pandas","numpy","nlp","data science","scikit-learn","computer vision"}
 
-        if len(matched) >= limit:
-            break
+    for skill in skills:
+        sl = skill.lower()
+        if sl in lang_keywords:
+            languages.append(skill)
+        elif sl in framework_kw:
+            frameworks.append(skill)
+        elif sl in cloud_kw:
+            cloud_devops.append(skill)
+        elif sl in data_kw:
+            data_ml.append(skill)
+        else:
+            other.append(skill)
 
-    return matched
+    queries = []
+
+    # Primary query — top language + framework
+    if languages and frameworks:
+        queries.append(f"{languages[0]} {frameworks[0]} Developer")
+    elif languages:
+        queries.append(f"{languages[0]} Developer")
+    elif frameworks:
+        queries.append(f"{frameworks[0]} Developer")
+
+    # Secondary — cloud/devops query
+    if cloud_devops:
+        queries.append(f"{' '.join(cloud_devops[:2])} Engineer")
+
+    # Tertiary — data/ML query
+    if data_ml:
+        queries.append(f"{data_ml[0]} Engineer")
+
+    # Fallback — use top 3 skills as one query
+    if not queries:
+        queries.append(" ".join(skills[:3]))
+
+    # Always add a simple single-skill query for broader results
+    if languages:
+        queries.append(f"{languages[0]} Developer")
+
+    # Deduplicate
+    seen, unique = set(), []
+    for q in queries:
+        if q.lower() not in seen:
+            seen.add(q.lower())
+            unique.append(q)
+
+    print(f"🔎 Search queries built: {unique}")
+    return unique
 
 
-def send_resume_to_companies(
-    file_path: str, companies: List[Dict[str, str]]
-) -> List[Dict[str, str]]:
+# ═══════════════════════════════════════════════════════════════════
+# MAIN FUNCTION
+# ═══════════════════════════════════════════════════════════════════
+
+def get_best_matching_companies(skills: list, limit: int = 15) -> list:
     """
-    Pretend to send the resume file to each matched company.
+    Fetch jobs from multiple sources using multiple queries,
+    then score each job against the candidate's full skill set.
 
-    This is a stub implementation that *does not* actually
-    send emails or submit forms. It simply marks each company
-    as 'sent' so the frontend can show a clear status.
+    Returns top `limit` jobs sorted by match_score descending.
     """
-    results: List[Dict[str, str]] = []
+    if not skills:
+        return []
 
-    for company in companies:
-        results.append(
-            {
-                "name": company["name"],
-                "apply_url": company["apply_url"],
-                "status": "sent",
-            }
-        )
+    queries  = build_queries(skills)
+    all_jobs = []
 
-    return results
+    for query in queries:
+        print(f"\n🔍 Fetching jobs for: '{query}'")
 
+        # JSearch — LinkedIn + Indeed via RapidAPI
+        try:
+            jsearch_jobs = scrape_jsearch(query, location="India", num_pages=2)
+            all_jobs.extend(jsearch_jobs)
+            print(f"  ✅ JSearch: {len(jsearch_jobs)} jobs")
+        except Exception as e:
+            print(f"  ❌ JSearch failed: {e}")
+
+        # RemoteOK — free remote jobs
+        try:
+            remote_jobs = scrape_remoteok(query)
+            all_jobs.extend(remote_jobs)
+            print(f"  ✅ RemoteOK: {len(remote_jobs)} jobs")
+        except Exception as e:
+            print(f"  ❌ RemoteOK failed: {e}")
+
+    # Normalize key names
+    normalized = []
+    for job in all_jobs:
+        normalized.append({
+            "title":       job.get("title", ""),
+            "company":     job.get("company", ""),
+            "platform":    job.get("platform", ""),
+            "apply_url":   job.get("url") or job.get("apply_url", ""),
+            "location":    job.get("location", ""),
+            "description": job.get("description", ""),
+            "salary":      job.get("salary", ""),
+            "job_type":    job.get("job_type", ""),
+            "posted":      job.get("posted", ""),
+            "match_score": 0.0,   # will be computed below
+        })
+
+    # Deduplicate by apply_url
+    seen, unique = set(), []
+    for job in normalized:
+        url = job["apply_url"]
+        if url and url not in seen:
+            seen.add(url)
+            unique.append(job)
+
+    # Compute real match score for every job
+    for job in unique:
+        job["match_score"] = compute_match_score(job, skills)
+
+    # Sort by match score — best first
+    unique.sort(key=lambda x: x["match_score"], reverse=True)
+
+    print(f"\n✅ Total unique jobs: {len(unique)}")
+    print(f"🏆 Top match: {unique[0]['title']} @ {unique[0]['company']} → {unique[0]['match_score']*100:.0f}%" if unique else "")
+
+    return unique[:limit]

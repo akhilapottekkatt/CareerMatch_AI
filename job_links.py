@@ -273,6 +273,25 @@ def scrape_naukri(query: str, location: str = "India") -> list:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# 4. REDIRECT LINK GENERATOR (Option B)
+# ═══════════════════════════════════════════════════════════════════
+
+import urllib.parse
+
+def generate_redirect_links(query: str, location: str = "India") -> dict:
+    full_query = f"{query} jobs {location}"
+    formatted_query = urllib.parse.quote(full_query)
+
+    linkedin_url = f"https://www.linkedin.com/jobs/search/?keywords={formatted_query}"
+    indeed_url   = f"https://www.indeed.com/jobs?q={formatted_query}"
+
+    return {
+        "query": full_query,
+        "linkedin": linkedin_url,
+        "indeed": indeed_url
+    }
+
+# ═══════════════════════════════════════════════════════════════════
 # MASTER FUNCTION
 # ═══════════════════════════════════════════════════════════════════
 

@@ -33,79 +33,48 @@ def compute_match_score(job: dict, skills: list) -> float:
 # QUERY BUILDER — builds multiple smart queries from skills
 # ═══════════════════════════════════════════════════════════════════
 
-def build_queries(skills: list) -> list:
+def build_queries(skills: list, expected_roles: list = []) -> list:
     """
-    Build multiple search queries from skills so we
-    don't miss jobs by using only 1-2 keywords.
-
-    Example:
-      skills = [Python, Django, React, AWS, Docker]
-      queries = [
-        "Python Django Developer",
-        "React Frontend Developer",
-        "AWS Docker DevOps",
-        "Python Developer",
-      ]
+    Build search queries from ALL skills + ALL expected roles.
+    No hardcoded category lists — every skill is used directly.
     """
-    # Categorize skills
-    languages   = []
-    frameworks  = []
-    cloud_devops = []
-    data_ml     = []
-    other       = []
-
-    lang_keywords    = {"python","java","javascript","typescript","c++","c#","ruby","php","swift","kotlin","go","rust","scala","r","dart"}
-    framework_kw     = {"django","flask","fastapi","react","angular","vue","nextjs","nodejs","express","spring","laravel"}
-    cloud_kw         = {"aws","azure","gcp","docker","kubernetes","terraform","ansible","devops","jenkins","ci/cd","linux"}
-    data_kw          = {"machine learning","deep learning","tensorflow","pytorch","pandas","numpy","nlp","data science","scikit-learn","computer vision"}
-
-    for skill in skills:
-        sl = skill.lower()
-        if sl in lang_keywords:
-            languages.append(skill)
-        elif sl in framework_kw:
-            frameworks.append(skill)
-        elif sl in cloud_kw:
-            cloud_devops.append(skill)
-        elif sl in data_kw:
-            data_ml.append(skill)
-        else:
-            other.append(skill)
-
     queries = []
 
-    # Primary query — top language + framework
-    if languages and frameworks:
-        queries.append(f"{languages[0]} {frameworks[0]} Developer")
-    elif languages:
-        queries.append(f"{languages[0]} Developer")
-    elif frameworks:
-        queries.append(f"{frameworks[0]} Developer")
+    # ── 1. ALL expected roles first (highest priority) ──
+    for role in expected_roles:
+        role = role.strip()
+        if role:
+            queries.append(role)
 
-    # Secondary — cloud/devops query
-    if cloud_devops:
-        queries.append(f"{' '.join(cloud_devops[:2])} Engineer")
+    # ── 2. Every single skill becomes its own query ──
+    for skill in skills:
+        skill = skill.strip()
+        if skill:
+            queries.append(f"{skill} Developer")
+            queries.append(f"{skill} Engineer")
 
-    # Tertiary — data/ML query
-    if data_ml:
-        queries.append(f"{data_ml[0]} Engineer")
+    # ── 3. Combine pairs of skills for richer queries ──
+    for i in range(0, min(len(skills), 20), 2):
+        pair = skills[i:i+2]
+        if len(pair) == 2:
+            queries.append(f"{pair[0]} {pair[1]} Developer")
 
-    # Fallback — use top 3 skills as one query
-    if not queries:
-        queries.append(" ".join(skills[:3]))
+    # ── 4. Combine top 3 skills into one broad query ──
+    if len(skills) >= 3:
+        queries.append(" ".join(skills[:3]) + " Developer")
 
-    # Always add a simple single-skill query for broader results
-    if languages:
-        queries.append(f"{languages[0]} Developer")
-
-    # Deduplicate
+    # ── 5. Deduplicate while preserving order ──
     seen, unique = set(), []
     for q in queries:
-        if q.lower() not in seen:
-            seen.add(q.lower())
+        ql = q.lower().strip()
+        if ql and ql not in seen:
+            seen.add(ql)
             unique.append(q)
 
-    print(f"🔎 Search queries built: {unique}")
+    print(f"🔎 Total search queries: {len(unique)}")
+    for q in unique:
+        print(f"   → {q}")
+
     return unique
 
 
@@ -113,7 +82,7 @@ def build_queries(skills: list) -> list:
 # MAIN FUNCTION
 # ═══════════════════════════════════════════════════════════════════
 
-def get_best_matching_companies(skills: list, limit: int = 15) -> list:
+def get_best_matching_companies(skills: list, limit: int = 50) -> list:
     """
     Fetch jobs from multiple sources using multiple queries,
     then score each job against the candidate's full skill set.
@@ -179,4 +148,82 @@ def get_best_matching_companies(skills: list, limit: int = 15) -> list:
     print(f"\n✅ Total unique jobs: {len(unique)}")
     print(f"🏆 Top match: {unique[0]['title']} @ {unique[0]['company']} → {unique[0]['match_score']*100:.0f}%" if unique else "")
 
+    return unique[:limit]
+
+
+
+def get_best_matching_companies_from_profile(profile: dict, limit: int = 50) -> list:
+    """
+    Fetch and score jobs using the full user profile from DB.
+    Uses skills + expected_roles + job_type + preferred_location.
+    """
+    skills         = profile.get("skills", [])
+    expected_roles = profile.get("expected_roles", [])
+    job_type       = profile.get("job_type", "")
+    pref_location  = profile.get("preferred_location", "")
+
+    if not skills and not expected_roles:
+        return []
+
+    # Build queries from both skills AND expected roles
+    all_queries = build_queries(skills)
+
+    # Add expected roles as extra queries
+    for role in expected_roles[:3]:
+        if role and role not in all_queries:
+            all_queries.append(role)
+
+    all_jobs = []
+
+    # Use "Remote" location if user prefers remote
+    location = "Remote" if pref_location == "Remote" else "India"
+
+    for query in all_queries:
+        print(f"\n🔍 Fetching jobs for: '{query}'")
+        try:
+            jsearch_jobs = scrape_jsearch(query, location=location, num_pages=2)
+            all_jobs.extend(jsearch_jobs)
+        except Exception as e:
+            print(f"  ❌ JSearch failed: {e}")
+        try:
+            remote_jobs = scrape_remoteok(query)
+            all_jobs.extend(remote_jobs)
+        except Exception as e:
+            print(f"  ❌ RemoteOK failed: {e}")
+
+    # Normalize
+    normalized = []
+    for job in all_jobs:
+        normalized.append({
+            "title":       job.get("title", ""),
+            "company":     job.get("company", ""),
+            "platform":    job.get("platform", ""),
+            "apply_url":   job.get("url") or job.get("apply_url", ""),
+            "location":    job.get("location", ""),
+            "description": job.get("description", ""),
+            "salary":      job.get("salary", ""),
+            "job_type":    job.get("job_type", ""),
+            "posted":      job.get("posted", ""),
+            "match_score": 0.0,
+        })
+
+    # Deduplicate
+    seen, unique = set(), []
+    for job in normalized:
+        url = job["apply_url"]
+        if url and url not in seen:
+            seen.add(url)
+            unique.append(job)
+
+    # Score each job against full profile skills
+    for job in unique:
+        job["match_score"] = compute_match_score(job, skills)
+
+    # Filter by job_type if user specified one
+    if job_type and job_type != "Any":
+        filtered = [j for j in unique if job_type.lower() in j.get("job_type", "").lower()]
+        unique   = filtered if filtered else unique  # fallback to all if filter removes everything
+
+    unique.sort(key=lambda x: x["match_score"], reverse=True)
+    print(f"\n✅ Total unique jobs from profile: {len(unique)}")
     return unique[:limit]

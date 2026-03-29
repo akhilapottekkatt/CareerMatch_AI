@@ -1,60 +1,73 @@
-import json
-from datetime import datetime, date
-from fastapi import FastAPI, Request, Form, UploadFile, File, Depends
+# main.py
+"""
+FastAPI application — fully converted to pure sqlite3.
+No SQLAlchemy Session or Depends(get_db) anywhere.
+All DB calls go through models.py helper functions.
+"""
+
+
+from datetime import datetime
+from utils import is_strong_password
+from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
-from database import create_users_table, engine, get_db
-from models import Base, User, Resume, JobSuggestion, AppliedJob
+from starlette.middleware.sessions import SessionMiddleware
+
+from database import create_users_table
 from auth import create_user, authenticate_user
-import os
-import shutil
 from resume_extracter import extract_text
 from resume_parser import parse_resume
 from job_links import generate_redirect_links
+from scheduler import start_scheduler, stop_scheduler
+import models
+from database import get_connection
+import os, json
 
-Base.metadata.create_all(bind=engine)
+
+# ═══════════════════════════════════════════════════════════════════
+# APP SETUP
+# ═══════════════════════════════════════════════════════════════════
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="supersecretkey")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SECRET_KEY", "change-this-in-production")
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-create_users_table()
+
+create_users_table()   # creates all tables on every startup — safe, uses IF NOT EXISTS
+
+
+# ── Start scheduler on startup, stop cleanly on shutdown ──────────
+@app.on_event("startup")
+async def startup_event():
+    start_scheduler()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    stop_scheduler()
 
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════
 
-def _get_current_user(request: Request, db: Session):
+def _current_user(request: Request) -> dict:
+    """Return user dict from session email. Returns {} if not logged in."""
     email = request.session.get("user")
     if not email:
-        return None
-    return db.query(User).filter(User.email == email).first()
+        return {}
+    return models.get_user_by_email(email) or {}
 
 
-def _already_applied_urls(user_id: int, db: Session) -> set:
-    rows = db.query(AppliedJob).filter(AppliedJob.user_id == user_id).all()
-    return {r.apply_url for r in rows if r.apply_url}
-
-
-def _get_latest_resume(user_id: int, db: Session):
-    """Get the most recent resume for a user."""
-    return (
-        db.query(Resume)
-        .filter(Resume.user_id == user_id)
-        .order_by(Resume.id.desc())
-        .first()
-    )
-
-
-def _has_resume(user_id: int, db: Session) -> bool:
-    """Check if user already has a resume uploaded."""
-    resume = _get_latest_resume(user_id, db)
-    # Has a real resume only if role or summary is not empty
-    return resume is not None and (resume.role or resume.summary)
+def _require_login(request: Request):
+    """Return user dict or None. Routes redirect to /login if None."""
+    user = _current_user(request)
+    return user if user else None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -65,23 +78,52 @@ def _has_resume(user_id: int, db: Session) -> bool:
 def register_page(request: Request):
     return templates.TemplateResponse("register.html", {
         "request":  request,
-        "message":  request.session.pop("message", None),
-        "msg_type": request.session.pop("msg_type", None)
+        "message":  request.session.pop("message",  None),
+        "msg_type": request.session.pop("msg_type", None),
     })
 
 
-@app.post("/register")
-def register_user(request: Request,
-                  name: str = Form(...),
-                  email: str = Form(...),
-                  password: str = Form(...)):
-    if not create_user(name, email, password):
-        request.session["message"]  = "Email already registered"
-        request.session["msg_type"] = "error"
-        return RedirectResponse("/register", status_code=303)
-    request.session["message"]  = "Registration successful! Please login"
-    request.session["msg_type"] = "success"
-    return RedirectResponse("/login", status_code=303)
+
+
+from fastapi import Request, Form
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+import models
+
+templates = Jinja2Templates(directory="templates")
+
+@app.post("/register", response_class=HTMLResponse)
+async def register(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+):
+    # Check duplicate email
+    if models.user_exists(email):
+        return templates.TemplateResponse("register.html", {
+            "request": request,
+            "message": "Email already exists",
+            "msg_type": "error"
+        })
+
+    # Password validation
+    valid, msg = is_strong_password(password)
+    if not valid:
+        return templates.TemplateResponse("register.html", {
+            "request": request,
+            "message": msg,
+            "msg_type": "error"
+        })
+
+    # Create user
+    models.create_user(email, password, name)
+
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "message": "Registration successful! Please login.",
+        "msg_type": "success"
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -97,19 +139,22 @@ def home():
 def login_page(request: Request):
     return templates.TemplateResponse("login.html", {
         "request":  request,
-        "message":  request.session.pop("message", None),
-        "msg_type": request.session.pop("msg_type", None)
+        "message":  request.session.pop("message",  None),
+        "msg_type": request.session.pop("msg_type", None),
     })
 
 
 @app.post("/login")
-def login_user(request: Request,
-               email: str = Form(...),
-               password: str = Form(...)):
-    user = authenticate_user(email, password)
-    if user:
-        request.session["user"] = user
+def login_user(
+    request:  Request,
+    email:    str = Form(...),
+    password: str = Form(...),
+):
+    user_email = authenticate_user(email, password)
+    if user_email:
+        request.session["user"] = user_email
         return RedirectResponse("/dashboard", status_code=303)
+
     request.session["message"]  = "Invalid email or password"
     request.session["msg_type"] = "error"
     return RedirectResponse("/login", status_code=303)
@@ -122,45 +167,44 @@ def logout(request: Request):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# DASHBOARD — shows resume info if exists, upload form if not
+# DASHBOARD
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(get_db)):
+def dashboard(request: Request):
     if "user" not in request.session:
         return RedirectResponse("/login", status_code=303)
 
-    user = _get_current_user(request, db)
+    user = _require_login(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
 
-    resume       = _get_latest_resume(user.id, db)
-    has_resume   = _has_resume(user.id, db)
-    resume_data  = None
+    resume     = models.get_latest_resume(user["id"])
+    has_resume = bool(resume and (resume.get("role") or resume.get("summary")))
+    resume_data = None
 
-    if has_resume and resume:
-        # Parse skills from JSON if stored
+    if has_resume:
         skills = []
         try:
-            skills = json.loads(resume.experience) if resume.experience else []
+            skills = json.loads(resume.get("experience") or "[]")
             if not isinstance(skills, list):
                 skills = []
         except Exception:
             skills = []
 
-        # Load from parsed_resumes.json for richer display
-        parsed_file = f"parsed_resumes_{user.id}.json"
+        # Load richer parsed data from cache file if it exists
+        parsed_file = f"parsed_resumes_{user['id']}.json"
         if os.path.exists(parsed_file):
             with open(parsed_file) as f:
-                saved = json.load(f)
+                saved  = json.load(f)
                 skills = saved.get("skills", skills)
 
         resume_data = {
-            "name":             user.username,
-            "role":             resume.role or "Professional",
-            "summary":          resume.summary or "",
-            "skills":           skills[:10],
-            "uploaded_at":      resume.created_at.strftime("%d %b %Y") if resume.created_at else "",
+            "name":        user.get("username", ""),
+            "role":        resume.get("role",    "Professional"),
+            "summary":     resume.get("summary", ""),
+            "skills":      skills[:10],
+            "uploaded_at": (resume.get("created_at") or "")[:10],
         }
 
     return templates.TemplateResponse("dashboard.html", {
@@ -168,126 +212,178 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "user":       request.session["user"],
         "has_resume": has_resume,
         "resume":     resume_data,
-        "message":    request.session.pop("message", None),
+        "message":    request.session.pop("message",  None),
         "msg_type":   request.session.pop("msg_type", None),
     })
 
 
 # ═══════════════════════════════════════════════════════════════════
-# UPLOAD RESUME — blocked if already uploaded (unless update=true)
+# UPLOAD RESUME
 # ═══════════════════════════════════════════════════════════════════
 
+
+
 @app.post("/upload_resume")
-async def upload_resume(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_resume(
+    request: Request,
+    file: UploadFile = File(...),
+    label: str = Form("")
+):
+    # ── Check login ──
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
 
-    print("Upload route called")
-
-    # Step 1: Save file
+    # ── Step 1: Save file ──
     os.makedirs("uploads", exist_ok=True)
     file_path = f"uploads/{file.filename}"
+
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
     print("🔄 Processing resume...")
 
+    # ── Step 2: Extract + Parse ──
     text = extract_text(file_path)
     parsed_data = parse_resume(text)
-    skills = parsed_data["skills"]
 
-    print("✅ Skills:", skills)
+    # ── Step 3: Extract fields ──
+    skills = parsed_data.get("skills", [])
+    summary = parsed_data.get("summary", "")
+    experience_years = float(parsed_data.get("experience_years", 0))
 
-    from company_matcher import get_best_matching_companies
-    from job_links import generate_redirect_links
-    from datetime import datetime
+    education = parsed_data.get("education", [])
+    highest_edu = education[0] if education else {}
 
-    best_matches = get_best_matching_companies(skills, limit=15)
-    query = " ".join(skills[:2]) if skills else "developer"
-    links = generate_redirect_links(query)
+    highest_degree = highest_edu.get("degree", "") or parsed_data.get("highest_degree", "")
+    institution = highest_edu.get("institution", "") or parsed_data.get("institution", "")
+    graduation_year = highest_edu.get("year", "") or parsed_data.get("graduation_year", "")
 
-    # ✅ Save to DB
-    user = _get_current_user(request, db)
-    if user:
-        # Save Resume record
-        existing_resume = db.query(Resume).filter(Resume.user_id == user.id).first()
-        if existing_resume:
-            existing_resume.role       = parsed_data.get("summary", "")[:100]
-            existing_resume.summary    = parsed_data.get("summary", "")
-            existing_resume.experience = json.dumps(skills)
-        else:
-            db.add(Resume(
-                user_id    = user.id,
-                role       = parsed_data.get("summary", "")[:100],
-                summary    = parsed_data.get("summary", ""),
-                experience = json.dumps(skills),
-            ))
+    name = parsed_data.get("name", "") or user.get("username", "")
+    phone = parsed_data.get("phone", "")
+    location = parsed_data.get("location", "")
 
-        # Save parsed resume to file for dashboard display
-        parsed_file = f"parsed_resumes_{user.id}.json"
-        with open(parsed_file, "w") as f:
-            json.dump(parsed_data, f)
+    print(f"✅ Skills   : {skills}")
+    print(f"✅ Degree   : {highest_degree}")
+    print(f"✅ Exp years: {experience_years}")
 
-        # Clear old unapplied suggestions
-        db.query(JobSuggestion).filter(
-            JobSuggestion.user_id    == user.id,
-            JobSuggestion.is_applied == False
-        ).delete()
+    # ── Step 4: Save Resume ──
+    models.deactivate_all_resumes(user["id"])
 
-        # Save new suggestions
-        saved = 0
-        for job in best_matches:
-            apply_url = job.get("apply_url", "")
-            if not apply_url:
-                continue  # skip jobs with no link
-            db.add(JobSuggestion(
-            user_id        = user.id,
-            title          = job.get("title", ""),
-            company        = job.get("company", ""),
-            platform       = job.get("platform", ""),
-            apply_url      = apply_url,
-            match_score    = job.get("match_score", 0.0),    # ← real score
-            date_suggested = datetime.utcnow(),
-            is_applied     = False
-            ))
-            saved += 1
+    resume_id = models.insert_resume(user["id"], {
+        "file_path": file_path,
+        "label": label or file.filename,
+        "role": summary[:100],
+        "summary": summary,
+        "experience": json.dumps(skills),
+        "highest_degree": highest_degree,
+        "institution": institution,
+        "graduation_year": graduation_year,
+        "experience_years": experience_years,
+    })
 
-        db.commit()
-        print(f"💾 Saved {saved} suggestions for user {user.id}")
-    else:
-        print("⚠️ No logged-in user found — suggestions not saved")
+    # models.link_skills_to_resume(resume_id, skills)
 
+    # ── Step 5: Update Profile ──
+    profile = models.get_or_create_profile(user["id"])
+
+    updates = {
+        "skills": json.dumps(skills),
+        "experience_years": experience_years,
+        "active_resume_id": resume_id,
+    }
+
+    if not profile.get("highest_degree") and highest_degree:
+        updates["highest_degree"] = highest_degree
+
+    if not profile.get("institution") and institution:
+        updates["institution"] = institution
+
+    if not profile.get("graduation_year") and graduation_year:
+        updates["graduation_year"] = graduation_year
+
+    if not profile.get("phone") and phone:
+        updates["phone"] = phone
+
+    if not profile.get("location") and location:
+        updates["location"] = location
+
+    models.update_profile(user["id"], updates)
+
+    # Update username if needed
+    if name and name != user.get("username"):
+        models.update_username(user["id"], name)
+
+    # ── Step 6: Save parsed cache ──
+    parsed_file = f"parsed_resumes_{user['id']}_{resume_id}.json"
+    with open(parsed_file, "w") as f:
+        json.dump(parsed_data, f)
+
+    # # ── Step 7: Build profile for matching ──
+    profile = models.get_or_create_profile(user["id"])
+
+    full_profile = {
+        "skills": json.loads(profile.get("skills") or "[]"),
+        "experience_years": profile.get("experience_years", 0),
+        "expected_roles": json.loads(profile.get("expected_roles") or "[]"),
+        "preferred_location": profile.get("preferred_location", ""),
+        "job_type": profile.get("job_type", ""),
+    }
+
+    # ── Step 8: Job Matching ──
+    from company_matcher import get_best_matching_companies_from_profile
+
+    raw_jobs = get_best_matching_companies_from_profile(full_profile, limit=100)
+    best_matches = models.match_jobs_to_resume(text, raw_jobs, threshold=0.2)
+
+    if not best_matches:
+        best_matches = raw_jobs[:50]
+
+    links = generate_redirect_links(" ".join(skills[:2]) if skills else "developer")
+
+    # ── Step 9: Save Suggestions ──
+    models.delete_unapplied_suggestions(user["id"])
+    models.insert_job_suggestions(user["id"], best_matches)
+
+    print(f"💾 Resume #{resume_id} saved with {len(best_matches)} jobs")
+
+    # ── Step 10: Response ──
     return {
+        "success": True,
+        "resume_id": resume_id,
         "skills": skills,
-        "jobs":   best_matches,
-        "links":  links
+        "jobs": best_matches,
+        "links": links,
+        "profile": {
+            "name": name,
+            "phone": phone,
+            "location": location,
+            "experience_years": experience_years,
+            "highest_degree": highest_degree,
+            "institution": institution,
+            "graduation_year": graduation_year,
+        }
     }
 
 
 # ═══════════════════════════════════════════════════════════════════
-# DELETE RESUME — allows user to remove CV and upload fresh one
+# DELETE RESUME
 # ═══════════════════════════════════════════════════════════════════
 
 @app.post("/delete_resume")
-def delete_resume(request: Request, db: Session = Depends(get_db)):
-    if "user" not in request.session:
+def delete_resume(request: Request):
+    user = _require_login(request)
+    if not user:
         return JSONResponse({"error": "Not logged in"}, status_code=401)
 
-    user = _get_current_user(request, db)
-    if not user:
-        return JSONResponse({"error": "User not found"}, status_code=401)
+    models.delete_all_resumes(user["id"])
 
-    db.query(Resume).filter(Resume.user_id == user.id).delete()
-    db.query(JobSuggestion).filter(
-        JobSuggestion.user_id    == user.id,
-        JobSuggestion.is_applied == False
-    ).delete()
-    db.commit()
 
-    # Remove cache file
-    parsed_file = f"parsed_resumes_{user.id}.json"
+    parsed_file = f"parsed_resumes_{user['id']}.json"
     if os.path.exists(parsed_file):
         os.remove(parsed_file)
 
-    print(f"🗑️  Resume deleted for user {user.id}")
+    print(f"🗑️  Resume deleted for user {user['id']}")
     return JSONResponse({"success": True, "message": "Resume deleted. You can upload a new one."})
 
 
@@ -296,47 +392,36 @@ def delete_resume(request: Request, db: Session = Depends(get_db)):
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get("/get_suggestions")
-def get_suggestions(request: Request, db: Session = Depends(get_db)):
-    if "user" not in request.session:
+def get_suggestions(request: Request):
+    user = _require_login(request)
+    if not user:
         return JSONResponse([], status_code=401)
 
-    user = _get_current_user(request, db)
-    if not user:
-        return JSONResponse([])
-
-    applied_urls = _already_applied_urls(user.id, db)
-
-    suggestions = (
-        db.query(JobSuggestion)
-        .filter(
-            JobSuggestion.user_id    == user.id,
-            JobSuggestion.is_applied == False
-        )
-        .order_by(JobSuggestion.match_score.desc())
-        .limit(5)
-        .all()
-    )
+    applied_urls = models.get_applied_urls(user["id"])
+    suggestions  = models.get_suggestions(user["id"])
 
     result = []
     for s in suggestions:
-        if s.apply_url in applied_urls:
+        if s.get("apply_url") in applied_urls:
             continue
+        score     = s.get("match_score", 0)
+        score_pct = round(score * 100) if score <= 1 else int(score)
         result.append({
-            "id":          s.id,
-            "role":        s.title,
-            "company":     s.company,
-            "platform":    s.platform,
-            "apply_url":   s.apply_url,
-            "match_score": round(s.match_score * 100) if s.match_score and s.match_score <= 1 else int(s.match_score or 0),
+            "id":          s["id"],
+            "role":        s.get("title",    ""),
+            "company":     s.get("company",  ""),
+            "platform":    s.get("platform", ""),
+            "apply_url":   s.get("apply_url",""),
+            "match_score": score_pct,
             "match_label": (
-            "🟢 Strong Match"  if (s.match_score or 0) >= 0.6 else
-            "🟡 Good Match"    if (s.match_score or 0) >= 0.3 else
-            "🔴 Partial Match"
+                "🟢 Strong Match" if score_pct >= 60 else
+                "🟡 Good Match"   if score_pct >= 30 else
+                "🔴 Partial Match"
             ),
-            "date":        s.date_suggested.strftime("%d %b %Y") if s.date_suggested else ""
+            "date": (s.get("date_suggested") or "")[:10],
         })
 
-    print(f"📋 Returning {len(result)} suggestions for user {user.id}")
+    print(f"📋 Returning {len(result)} suggestions for user {user['id']}")
     return JSONResponse(result)
 
 
@@ -345,42 +430,20 @@ def get_suggestions(request: Request, db: Session = Depends(get_db)):
 # ═══════════════════════════════════════════════════════════════════
 
 @app.post("/mark_applied/{job_id}")
-def mark_applied(job_id: int, request: Request, db: Session = Depends(get_db)):
-    if "user" not in request.session:
+def mark_applied(job_id: int, request: Request):
+    user = _require_login(request)
+    if not user:
         return JSONResponse({"error": "Not logged in"}, status_code=401)
 
-    user = _get_current_user(request, db)
-    if not user:
-        return JSONResponse({"error": "User not found"}, status_code=401)
-
-    suggestion = db.query(JobSuggestion).filter(
-        JobSuggestion.id      == job_id,
-        JobSuggestion.user_id == user.id
-    ).first()
-
+    suggestion = models.get_suggestion_by_id(job_id, user["id"])
     if not suggestion:
         return JSONResponse({"error": "Not found"}, status_code=404)
 
-    suggestion.is_applied = True
+    models.mark_suggestion_applied(job_id, user["id"])
 
-    already = db.query(AppliedJob).filter(
-        AppliedJob.user_id   == user.id,
-        AppliedJob.apply_url == suggestion.apply_url
-    ).first()
+    if not models.already_applied(user["id"], suggestion["apply_url"]):
+        models.insert_applied_job(user["id"], suggestion)
 
-    if not already:
-        db.add(AppliedJob(
-            user_id     = user.id,
-            title       = suggestion.title,
-            company     = suggestion.company,
-            platform    = suggestion.platform,
-            apply_url   = suggestion.apply_url,
-            match_score = suggestion.match_score,
-            applied_at  = datetime.utcnow(),
-            status      = "applied"
-        ))
-
-    db.commit()
     return JSONResponse({"success": True, "job_id": job_id, "redirect_url": "/applied"})
 
 
@@ -394,7 +457,7 @@ def suggestions_page(request: Request):
         return RedirectResponse("/login", status_code=303)
     return templates.TemplateResponse("suggestions.html", {
         "request": request,
-        "user":    request.session["user"]
+        "user":    request.session["user"],
     })
 
 
@@ -403,71 +466,286 @@ def suggestions_page(request: Request):
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get("/applied", response_class=HTMLResponse)
-def applied_page(request: Request, db: Session = Depends(get_db)):
+def applied_page(request: Request):
     if "user" not in request.session:
         return RedirectResponse("/login", status_code=303)
 
-    user    = _get_current_user(request, db)
+    user    = _require_login(request)
     applied = []
 
     if user:
-        rows = (
-            db.query(AppliedJob)
-            .filter(AppliedJob.user_id == user.id)
-            .order_by(AppliedJob.applied_at.desc())
-            .all()
-        )
-        for a in rows:
+        for a in models.get_applied_jobs(user["id"]):
+            score = a.get("match_score", 0)
             applied.append({
-                "title":       a.title,
-                "company":     a.company,
-                "platform":    a.platform,
-                "apply_url":   a.apply_url,
-                "status":      a.status,
-                "applied_at":  a.applied_at.strftime("%d %b %Y") if a.applied_at else "",
-                "match_score": a.match_score
+                "title":       a.get("title",     ""),
+                "company":     a.get("company",   ""),
+                "platform":    a.get("platform",  ""),
+                "apply_url":   a.get("apply_url", ""),
+                "status":      a.get("status",    "applied"),
+                "applied_at":  (a.get("applied_at") or "")[:10],
+                "match_score": round(score * 100) if score <= 1 else int(score),
             })
 
     return templates.TemplateResponse("applied.html", {
         "request": request,
         "user":    request.session["user"],
-        "applied": applied
+        "applied": applied,
     })
 
 
-# ═══════════════════════════════════════════════════════════════════
-# GET APPLIED (JSON for applied.html fetch)
-# ═══════════════════════════════════════════════════════════════════
-
 @app.get("/get_applied")
-def get_applied(request: Request, db: Session = Depends(get_db)):
-    if "user" not in request.session:
+def get_applied(request: Request):
+    user = _require_login(request)
+    if not user:
         return JSONResponse([], status_code=401)
 
-    user = _get_current_user(request, db)
-    if not user:
-        return JSONResponse([])
-
-    rows = (
-        db.query(AppliedJob)
-        .filter(AppliedJob.user_id == user.id)
-        .order_by(AppliedJob.applied_at.desc())
-        .all()
-    )
-
     result = []
-    for a in rows:
+    for a in models.get_applied_jobs(user["id"]):
+        score = a.get("match_score", 0)
         result.append({
-            "role":         a.title,
-            "company":      a.company,
-            "platform":     a.platform,
-            "apply_url":    a.apply_url,
-            "status":       a.status,
-            "applied_date": a.applied_at.strftime("%d %b %Y") if a.applied_at else "",
-            "match_score":  round(a.match_score * 100) if a.match_score and a.match_score <= 1 else int(a.match_score or 0),
+            "role":         a.get("title",    ""),
+            "company":      a.get("company",  ""),
+            "platform":     a.get("platform", ""),
+            "apply_url":    a.get("apply_url",""),
+            "status":       a.get("status",   "applied"),
+            "applied_date": (a.get("applied_at") or "")[:10],
+            "match_score":  round(score * 100) if score <= 1 else int(score),
+        })
+    return JSONResponse(result)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PROFILE PAGE
+# ═══════════════════════════════════════════════════════════════════
+
+@app.get("/profile", response_class=HTMLResponse)
+def profile_page(request: Request):
+    if "user" not in request.session:
+        return RedirectResponse("/login", status_code=303)
+
+    user = _require_login(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    profile = models.get_or_create_profile(user["id"])
+    resumes = models.get_all_resumes(user["id"])
+
+    skills = []
+    try:
+        skills = json.loads(profile.get("skills") or "[]")
+    except Exception:
+        pass
+
+    expected_roles = []
+    try:
+        expected_roles = json.loads(profile.get("expected_roles") or "[]")
+    except Exception:
+        pass
+
+    resume_list = []
+    for r in resumes:
+        resume_skills = []
+        try:
+            resume_skills = json.loads(r.get("experience") or "[]")
+        except Exception:
+            pass
+        resume_list.append({
+            "id":          r["id"],
+            "label":       r.get("label") or f"Resume {r['id']}",
+            "role":        r.get("role",             ""),
+            "skills":      resume_skills[:5],
+            "is_active":   r.get("is_active",        0),
+            "exp_years":   r.get("experience_years", 0),
+            "degree":      r.get("highest_degree",   ""),
+            "institution": r.get("institution",      ""),
+            "uploaded_at": (r.get("created_at") or "")[:10],
         })
 
-    return JSONResponse(result)
+    return templates.TemplateResponse("profile.html", {
+        "request":        request,
+        "user":           user,
+        "profile":        profile,
+        "skills":         skills,
+        "expected_roles": expected_roles,
+        "resumes":        resume_list,
+        "message":        request.session.pop("message",  None),
+        "msg_type":       request.session.pop("msg_type", None),
+    })
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/update — save basic info + preferences
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/update")
+async def update_profile(
+    request:            Request,
+    name:               str   = Form(...),
+    phone:              str   = Form(""),
+    location:           str   = Form(""),
+    experience_years:   float = Form(0.0),
+    preferred_location: str   = Form(""),
+    salary_range:       str   = Form(""),
+    job_type:           str   = Form(""),
+    highest_degree:     str   = Form(""),
+    institution:        str   = Form(""),
+    graduation_year:    str   = Form(""),
+):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    models.update_username(user["id"], name)
+    models.update_profile(user["id"], {
+        "phone":              phone,
+        "location":           location,
+        "experience_years":   experience_years,
+        "preferred_location": preferred_location,
+        "salary_range":       salary_range,
+        "job_type":           job_type,
+        "highest_degree":     highest_degree,
+        "institution":        institution,
+        "graduation_year":    graduation_year,
+    })
+
+    request.session["message"]  = "Profile updated successfully!"
+    request.session["msg_type"] = "success"
+    return RedirectResponse("/profile", status_code=303)
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/update_roles
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/update_roles")
+async def update_roles(request: Request):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+    try:
+        body  = await request.json()
+        roles = body.get("roles", [])
+    except Exception:
+        return JSONResponse({"error": "Bad request"}, status_code=400)
+
+    models.update_profile(user["id"], {"expected_roles": json.dumps(roles)})
+    return JSONResponse({"success": True, "roles": roles})
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/update_skills
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/update_skills")
+async def update_skills(request: Request):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+    try:
+        body   = await request.json()
+        skills = body.get("skills", [])
+    except Exception:
+        return JSONResponse({"error": "Bad request"}, status_code=400)
+
+    skills = sorted(set(s.strip() for s in skills if s.strip()))
+    models.update_profile(user["id"], {"skills": json.dumps(skills)})
+    return JSONResponse({"success": True, "skills": skills})
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/upload_pic
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/upload_pic")
+async def upload_profile_pic(request: Request, file: UploadFile = File(...)):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    os.makedirs("static/profile_pics", exist_ok=True)
+    ext      = file.filename.split(".")[-1]
+    pic_path = f"static/profile_pics/user_{user['id']}.{ext}"
+
+    with open(pic_path, "wb") as f:
+        f.write(await file.read())
+
+    models.update_profile(user["id"], {"profile_pic": f"/{pic_path}"})
+    return JSONResponse({"success": True, "pic_url": f"/{pic_path}"})
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/set_active_resume/{resume_id}
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/set_active_resume/{resume_id}")
+def set_active_resume(resume_id: int, request: Request):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    resume = models.get_resume_by_id(resume_id, user["id"])
+    if not resume:
+        return JSONResponse({"error": "Resume not found"}, status_code=404)
+
+    models.set_active_resume(resume_id, user["id"])
+
+    # Sync profile fields from the newly activated resume
+    profile_updates = {
+        "active_resume_id": resume_id,
+        "experience_years": resume.get("experience_years", 0),
+    }
+    try:
+        skills = json.loads(resume.get("experience") or "[]")
+        profile_updates["skills"] = json.dumps(skills)
+    except Exception:
+        pass
+    for field in ("highest_degree", "institution", "graduation_year"):
+        if resume.get(field):
+            profile_updates[field] = resume[field]
+
+    models.update_profile(user["id"], profile_updates)
+    return JSONResponse({"success": True, "active_resume_id": resume_id})
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/delete_resume/{resume_id}
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/delete_resume/{resume_id}")
+def delete_single_resume(resume_id: int, request: Request):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    resume = models.get_resume_by_id(resume_id, user["id"])
+    if not resume:
+        return JSONResponse({"error": "Resume not found"}, status_code=404)
+
+    if resume.get("file_path") and os.path.exists(resume["file_path"]):
+        os.remove(resume["file_path"])
+
+    parsed_file = f"parsed_resumes_{user['id']}_{resume_id}.json"
+    if os.path.exists(parsed_file):
+        os.remove(parsed_file)
+
+    models.delete_resume(resume_id, user["id"])
+    return JSONResponse({"success": True, "deleted_id": resume_id})
+
+
+# ───────────────────────────────────────────────────────────────────
+# POST /profile/rename_resume/{resume_id}
+# ───────────────────────────────────────────────────────────────────
+
+@app.post("/profile/rename_resume/{resume_id}")
+async def rename_resume(resume_id: int, request: Request):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    body  = await request.json()
+    label = body.get("label", f"Resume {resume_id}")
+    models.rename_resume(resume_id, user["id"], label)
+    return JSONResponse({"success": True, "label": label})
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -476,18 +754,125 @@ def get_applied(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/send_best_matches")
 async def send_best_matches(request: Request):
-    body  = await request.json()
-    email = body.get("email", "")
-    print(f"📧 Email requested → {email}")
-    return JSONResponse({"sent": True})
+    from email_notifier import send_best_jobs_email
+
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    suggestions = models.get_suggestions(user["id"])
+    top_jobs    = suggestions[:10]
+
+    sent = send_best_jobs_email(user.get("email", ""), top_jobs)
+    return JSONResponse({"sent": sent})
+
+
+# ═══════════════════════════════════════════════════════════════════
+# REMATCH RESUME — called when user clicks "Set Active" in profile
+# Re-runs full job matching using the already-parsed resume file
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/rematch_resume/{resume_id}")
+async def rematch_resume(resume_id: int, request: Request):
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    # Get the resume record
+    resume = models.get_resume_by_id(resume_id, user["id"])
+    if not resume:
+        return JSONResponse({"error": "Resume not found"}, status_code=404)
+
+    # Re-extract text from the saved file
+    file_path = resume.get("file_path", "")
+    if not file_path or not os.path.exists(file_path):
+        return JSONResponse({"error": "Resume file not found on disk", "jobs_count": 0}, status_code=404)
+
+    text = extract_text(file_path)
+    if not text:
+        return JSONResponse({"error": "Could not extract text", "jobs_count": 0}, status_code=400)
+
+    # Build full profile for matching
+    profile = models.get_or_create_profile(user["id"])
+    full_profile = {
+        "skills":             json.loads(profile.get("skills") or "[]"),
+        "experience_years":   profile.get("experience_years", 0),
+        "expected_roles":     json.loads(profile.get("expected_roles") or "[]"),
+        "preferred_location": profile.get("preferred_location", ""),
+        "job_type":           profile.get("job_type", ""),
+    }
+
+    # Fetch jobs + BERT match
+    from company_matcher import get_best_matching_companies_from_profile
+    raw_jobs     = get_best_matching_companies_from_profile(full_profile, limit=100)
+    best_matches = models.match_jobs_to_resume(text, raw_jobs, threshold=0.2)
+    if not best_matches:
+        best_matches = raw_jobs[:50]
+
+    # Replace old suggestions with new ones
+    models.delete_unapplied_suggestions(user["id"])
+    models.insert_job_suggestions(user["id"], best_matches)
+
+    print(f"🔄 Rematched resume #{resume_id} → {len(best_matches)} suggestions for user {user['id']}")
+    return JSONResponse({"success": True, "jobs_count": len(best_matches)})
 
 
 
 
 
+# ═══════════════════════════════════════════════════════════════════
+# QUICK JOB LINKS
+# ═══════════════════════════════════════════════════════════════════
 
+@app.get("/scheduler-status")
+def scheduler_status(request: Request):
+    from scheduler import _scheduler
+    import models
 
+    user = _require_login(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
 
+    # Get scheduler info
+    job        = _scheduler.get_job("hourly_refresh") if _scheduler else None
+    next_run   = str(job.next_run_time)[:19]           if job else "Not running"
+    is_running = _scheduler.running                     if _scheduler else False
+
+    # Get suggestion counts per user
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT
+                u.id,
+                u.email,
+                COUNT(CASE WHEN js.is_applied = 0 THEN 1 END) AS pending,
+                COUNT(CASE WHEN js.is_applied = 1 THEN 1 END) AS applied,
+                MAX(js.date_suggested)                         AS last_updated
+            FROM users u
+            LEFT JOIN job_suggestions js ON js.user_id = u.id
+            GROUP BY u.id
+        """).fetchall()
+        users_data = [dict(r) for r in rows]
+
+        # Get last 5 suggestion timestamps for current user
+        recent = conn.execute("""
+            SELECT title, company, platform, match_score, date_suggested
+            FROM job_suggestions
+            WHERE user_id = ? AND is_applied = 0
+            ORDER BY date_suggested DESC
+            LIMIT 5
+        """, (user["id"],)).fetchall()
+        recent_jobs = [dict(r) for r in recent]
+    finally:
+        conn.close()
+
+    return {
+        "scheduler_running": is_running,
+        "next_run":          next_run,
+        "users":             users_data,
+        "your_recent_suggestions": recent_jobs,
+        "checked_at":        datetime.now().strftime("%d %b %Y %H:%M:%S")
+    }
 
 
 @app.get("/quick-job-links")

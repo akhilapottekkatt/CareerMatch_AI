@@ -182,7 +182,10 @@ def scrape_naukri(query: str, location: str = "India") -> list:
             )
 
             page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-            time.sleep(random.uniform(3, 5))
+            for _ in range(3):
+                page.mouse.wheel(0, 3000)
+                time.sleep(2)
+            
 
             # ── Try multiple selectors (Naukri updates their HTML often) ──
             card_selectors = [
@@ -190,7 +193,8 @@ def scrape_naukri(query: str, location: str = "India") -> list:
                 ".jobTuple",               # older
                 "article.jobTupleHeader",  # alternative
                 "[class*='jobTuple']",     # wildcard match
-                ".job-container",          # fallback
+                ".job-container",   
+                ".cust-job-tuple",       # fallback
                 "div[type='tuple']",       # another variant
             ]
 

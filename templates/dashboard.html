@@ -16,9 +16,10 @@
             <span class="cm-logo-text">CareerMatch AI</span>
         </div>
         <nav class="cm-nav">
-            <a href="/dashboard" class="cm-nav-link cm-nav-link-active">Dashboard</a>
-            <a href="/applied" class="cm-nav-link">Applied Jobs</a>
+            <a href="/dashboard"   class="cm-nav-link cm-nav-link-active">Dashboard</a>
             <a href="/suggestions" class="cm-nav-link">Suggestions</a>
+            <a href="/applied"     class="cm-nav-link">Applied Jobs</a>
+            <a href="/profile"     class="cm-nav-link">Profile</a>
             <a href="/logout"      class="cm-nav-link">Logout</a>
         </nav>
     </div>
@@ -26,37 +27,64 @@
 
 <main class="cm-main">
     <section class="cm-shell">
+
+        <!-- ── Left panel: info ── -->
         <aside class="cm-panel cm-panel-info">
             <h1 class="cm-title">Smart job applications, powered by your resume.</h1>
             <p class="cm-subtitle">
                 Upload your latest resume and let CareerMatch AI extract your skills,
-                search leading job platforms, and automatically send tailored applications
-                on your behalf.
+                search leading job platforms, and find tailored job matches for you.
             </p>
-
             <ul class="cm-features">
                 <li>Parse skills and experience from your PDF resume</li>
                 <li>Search LinkedIn, Indeed, Naukri and more</li>
-                <li>Automatically send up to 5 matching applications per day</li>
-                <li>Receive daily email summaries with companies and roles</li>
+                <li>Get ranked job suggestions with match scores</li>
+                <li>Receive daily email summaries of best matches</li>
             </ul>
         </aside>
 
+        <!-- ── Right panel: upload form ── -->
         <section class="cm-panel cm-panel-form">
             <h2 class="cm-panel-title">Upload resume &amp; start matching</h2>
             <p class="cm-panel-description">
-                Provide your email so we can send you a daily summary of the companies and roles we applied to.
+                Upload your PDF resume — we will extract your skills and find the best
+                matching jobs across multiple platforms.
             </p>
 
+            <!-- Profile nudge banner -->
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.75rem 1rem;
+                background: rgba(124,58,237,0.08);
+                border: 1px solid rgba(124,58,237,0.2);
+                border-radius: 12px;
+                margin-bottom: 1.25rem;
+            ">
+                <div>
+                    <div style="font-weight:600;font-size:0.9rem;">Complete your profile</div>
+                    <div style="font-size:0.75rem;color:#94A3B8;">
+                        Add job preferences and expected roles for better matches
+                    </div>
+                </div>
+                <a href="/profile" style="
+                    padding: 0.45rem 1rem;
+                    border-radius: 8px;
+                    background: linear-gradient(135deg, #2563EB, #7C3AED);
+                    color: white;
+                    font-size: 0.8rem;
+                    font-weight: 600;
+                    text-decoration: none;
+                ">Go to Profile →</a>
+            </div>
+
+            <!-- Upload form -->
+            <!-- FIX: form no longer has email field (was crashing JS) -->
             <form id="uploadForm" class="cm-form">
                 <div class="cm-field">
-                    <label for="resume" class="cm-label">Resume (PDF)</label>
-                    <input type="file" id="resume" accept="application/pdf" required class="cm-input">
-                </div>
-
-                <div class="cm-field">
-                    <label for="email" class="cm-label">Notification email</label>
-                    <input type="email" id="email" placeholder="you@example.com" required class="cm-input">
+                    <label for="resume" class="cm-label">Resume (PDF or DOCX)</label>
+                    <input type="file" id="resume" accept="application/pdf,.docx" required class="cm-input">
                 </div>
 
                 <button type="submit" class="cm-button cm-button-primary">
@@ -64,29 +92,27 @@
                 </button>
 
                 <p class="cm-hint">
-                    We never share your resume or email with third parties without your consent.
+                    We never share your resume with third parties without your consent.
                 </p>
             </form>
 
+            <!-- Results area -->
             <section id="result" class="cm-results cm-results-empty">
                 <p class="cm-placeholder">
                     Results will appear here after you upload your resume.
                 </p>
             </section>
+
         </section>
     </section>
 </main>
 
 <script>
-let lastSkills = [];
-let lastEmail = "";
-
 document.getElementById("uploadForm")
-.addEventListener("submit", async function(e){
+.addEventListener("submit", async function(e) {
     e.preventDefault();
 
     const fileInput = document.getElementById("resume");
-    const emailInput = document.getElementById("email");
     const resultDiv = document.getElementById("result");
 
     if (!fileInput.files.length) {
@@ -94,15 +120,17 @@ document.getElementById("uploadForm")
         return;
     }
 
+    // Build form data — only file + optional label
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
-    formData.append("email", emailInput.value);
+    formData.append("label", "Dashboard Upload");
 
+    // Show loading state
     resultDiv.classList.remove("cm-results-empty");
     resultDiv.innerHTML = `
         <div class="cm-loading">
             <div class="cm-spinner"></div>
-            <p>Analyzing your resume and fetching matching jobs...</p>
+            <p>Analysing your resume and fetching matching jobs...</p>
         </div>
     `;
 
@@ -112,102 +140,65 @@ document.getElementById("uploadForm")
             body: formData
         });
 
+        // FIX: handle non-OK responses cleanly
         if (!response.ok) {
-            const errorText = await response.text();
+            const err = await response.json().catch(() => ({}));
             resultDiv.innerHTML = `
                 <div class="cm-error">
-                    <h3>Something went wrong</h3>
-                    <p>We couldn't process your resume. Please try again.</p>
+                    <h3>Upload failed</h3>
+                    <p>${err.error || "Something went wrong. Please try again."}</p>
                 </div>
             `;
-            console.error("Upload error:", errorText);
             return;
         }
 
         const data = await response.json();
+        const skillCount = (data.skills || []).length;
+        const jobCount   = (data.jobs   || []).length;
 
-        lastSkills = data.skills_found || [];
-        lastEmail = emailInput.value || "";
-
-        const best = data.best_matches || [];
-
-        let html = "";
-
-        html += `
-            <div class="cm-card">
-                <h3>Best matching jobs for this resume</h3>
-                ${
-                    best.length
-                        ? `<ul class="cm-company-list">
-                            ${best.map(job => `
-                                <li class="cm-company-item">
-                                    <div class="cm-company-main">
-                                        <span class="cm-company-name">${job.role || "Role not specified"} at ${job.name || "Unknown company"}</span>
-                                        ${job.match_score ? `<span class="cm-status-badge">${job.match_score}% match</span>` : ""}
-                                    </div>
-                                    ${job.apply_url ? `<a href="${job.apply_url}" target="_blank" class="cm-link">View job posting</a>` : ""}
-                                </li>
-                            `).join("")}
-                        </ul>`
-                        : `<p class="cm-placeholder">We couldn't find strong matches (80%+ skill fit) for this resume.</p>`
-                }
+        // FIX: removed dead code referencing undefined "best" and "html" variables
+        // Show clean success card and redirect to suggestions
+        resultDiv.classList.remove("cm-results-empty");
+        resultDiv.innerHTML = `
+            <div class="cm-card" style="text-align:center;padding:2rem;">
+                <div style="font-size:2.5rem;margin-bottom:1rem;">✅</div>
+                <h3 style="margin-bottom:0.5rem;">Resume Parsed Successfully!</h3>
+                <p style="color:#94A3B8;margin-bottom:0.4rem;">
+                    Extracted <strong style="color:white;">${skillCount} skills</strong>
+                    · Found <strong style="color:white;">${jobCount} matching jobs</strong>
+                </p>
+                <p style="color:#94A3B8;margin-bottom:1.5rem;font-size:0.875rem;">
+                    Your job suggestions are ready. You can also review your profile
+                    to improve match accuracy.
+                </p>
+                <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+                    <a href="/suggestions" style="
+                        display:inline-block;
+                        padding:0.75rem 1.75rem;
+                        border-radius:10px;
+                        background:linear-gradient(135deg,#2563EB,#7C3AED);
+                        color:white;
+                        font-weight:600;
+                        text-decoration:none;
+                        font-size:0.9rem;
+                    ">View Job Suggestions →</a>
+                    <a href="/profile" style="
+                        display:inline-block;
+                        padding:0.75rem 1.75rem;
+                        border-radius:10px;
+                        background:transparent;
+                        border:1px solid rgba(124,58,237,0.4);
+                        color:#A78BFA;
+                        font-weight:600;
+                        text-decoration:none;
+                        font-size:0.9rem;
+                    ">Review Profile</a>
+                </div>
             </div>
         `;
 
-        if (best.length) {
-            html += `
-                <button type="button" id="sendBestButton" class="cm-button cm-button-secondary">
-                    Email me these best matches
-                </button>
-                <p class="cm-hint">
-                    We will send up to 5 of the strongest matches based on your resume to your inbox.
-                </p>
-            `;
-        }
-
-        resultDiv.innerHTML = html;
-
-        const sendBtn = document.getElementById("sendBestButton");
-        if (sendBtn) {
-            sendBtn.addEventListener("click", async () => {
-                if (!lastEmail || !lastSkills.length) {
-                    alert("Please upload your resume again before requesting email matches.");
-                    return;
-                }
-
-                sendBtn.disabled = true;
-                sendBtn.textContent = "Sending best matches...";
-
-                try {
-                    const resp = await fetch("/send_best_matches", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            email: lastEmail,
-                            skills: lastSkills,
-                        }),
-                    });
-
-                    const result = await resp.json();
-                    if (result.sent) {
-                        sendBtn.textContent = "Best matches sent to your email";
-                    } else {
-                        sendBtn.disabled = false;
-                        sendBtn.textContent = "Email me these best matches";
-                        alert("We couldn't send the email. Please check your email configuration or try again later.");
-                    }
-                } catch (err) {
-                    console.error("Error sending best matches:", err);
-                    sendBtn.disabled = false;
-                    sendBtn.textContent = "Email me these best matches";
-                    alert("Unexpected error while sending email. Please try again.");
-                }
-            });
-        }
     } catch (err) {
-        console.error("Unexpected error:", err);
+        console.error("Upload error:", err);
         resultDiv.innerHTML = `
             <div class="cm-error">
                 <h3>Unexpected error</h3>
@@ -220,5 +211,3 @@ document.getElementById("uploadForm")
 
 </body>
 </html>
-
-

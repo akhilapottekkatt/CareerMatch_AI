@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-
+from job_links import generate_redirect_links
 from database import create_users_table
 from auth import create_user, authenticate_user
 from resume_extracter import extract_text

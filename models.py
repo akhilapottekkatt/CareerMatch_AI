@@ -21,8 +21,8 @@ def create_user(email: str, password: str, username: str = "") -> int:
     conn = get_connection()
     try:
         cursor = conn.execute("""
-            INSERT INTO users (email, password, username, created_at)
-            VALUES (?, ?, ?, datetime('now'))
+            INSERT INTO users (email, password, username)
+            VALUES (?, ?, ?)
         """, (
             email.lower().strip(),
             password,

@@ -1,10 +1,11 @@
 """
 job_links.py
 ============
-Master job scraper combining three sources:
-1. JSearch API (RapidAPI)  — LinkedIn + Indeed results via API
+Master job scraper combining multiple sources:
+1. JSearch API (RapidAPI)  — LinkedIn + Indeed via API
 2. RemoteOK API            — free, no key needed
-3. Playwright              — Naukri direct scrape
+3. LinkedIn guest HTML     — public jobs-guest listings (+ optional description fetch)
+4. Playwright              — Naukri direct scrape
 """
 import os
 import time
@@ -13,7 +14,25 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 
+try:
+    from playwright.sync_api import sync_playwright  # pyright: ignore[reportMissingImports]
+except ImportError:
+    sync_playwright = None  # optional; install with: pip install playwright
+
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "")
+
+from linkedin_scraper import scrape_linkedin_guest
+
+
+def scrape_linkedin(query: str, location: str = "India", pages: int = 1) -> list:
+    """
+    LinkedIn jobs via the public guest listing endpoint.
+    Disable with env ``LINKEDIN_SCRAPE=0`` if needed.
+    """
+    if os.getenv("LINKEDIN_SCRAPE", "1").lower() in ("0", "false", "no"):
+        print("   → LinkedIn scrape skipped (LINKEDIN_SCRAPE=0)")
+        return []
+    return scrape_linkedin_guest(query, location=location, pages=pages)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -139,13 +158,11 @@ def scrape_remoteok(query: str) -> list:
 # ═══════════════════════════════════════════════════════════════════
 
 def scrape_naukri(query: str, location: str = "India") -> list:
-    jobs = []
-
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
+    if sync_playwright is None:
         print("⚠️  Playwright not installed.")
         return []
+
+    jobs = []
 
     # Naukri URL format: /python-developer-jobs-in-india
     slug       = query.lower().replace(" ", "-")
@@ -320,6 +337,13 @@ def scrape_all_jobs(query: str, location: str = "India") -> list:
         all_jobs.extend(scrape_naukri(query, location))
     except Exception as e:
         print(f"❌ Naukri failed: {e}")
+
+    try:
+        li = scrape_linkedin(query, location, pages=1)
+        all_jobs.extend(li)
+        print(f"✅ LinkedIn: {len(li)} jobs")
+    except Exception as e:
+        print(f"❌ LinkedIn failed: {e}")
 
     # Deduplicate by URL
     seen, unique = set(), []

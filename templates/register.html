@@ -1,88 +1,135 @@
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Register{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main">
+    <section class="cm-shell">
+        <aside class="cm-panel cm-panel-info">
+            <h1 class="cm-title">Create your account</h1>
+            <p class="cm-subtitle">
+                Join CareerMatch AI and start receiving smart job matches based on your resume.
+            </p>
+            <ul class="cm-features">
+                <li>Upload your resume once — we extract skills automatically</li>
+                <li>Ranked matches across LinkedIn, Indeed, Naukri, and more</li>
+                <li>Daily summaries and tailored suggestions</li>
+                <li>Track where you have applied</li>
+            </ul>
+        </aside>
 
+        <section class="cm-panel cm-panel-form">
+            {% if message %}
+                <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% else %}cm-alert-error{% endif %}">
+                    {{ message }}
+                </div>
+            {% endif %}
+            <h2 class="cm-panel-title">Register</h2>
+            <p class="cm-panel-description">Create an account to start matching.</p>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CareerMatch AI · Register</title>
-<link rel="stylesheet" href="/static/css/style.css">
-</head>
+            <form id="register-form" action="/register" method="post" class="cm-form is-pw-invalid">
+                <div class="cm-field">
+                    <label class="cm-label" for="reg-name">Username</label>
+                    <input type="text" id="reg-name" name="name" required class="cm-input" autocomplete="username">
+                </div>
 
-<body>
+                <div class="cm-field">
+                    <label class="cm-label" for="reg-email">Email</label>
+                    <input type="email" id="reg-email" name="email" required class="cm-input" autocomplete="email">
+                </div>
 
-<header class="cm-header">
-<div class="cm-header-inner">
-<div class="cm-logo">
-<span class="cm-logo-mark">CM</span>
-<span class="cm-logo-text">CareerMatch AI</span>
-</div>
-</div>
-</header>
+                <div class="cm-field cm-pw-field">
+                    <label class="cm-label" for="reg-password">Password</label>
+                    <input type="password" id="reg-password" name="password" required class="cm-input" autocomplete="new-password" aria-describedby="pw-rules pw-error">
+                    <ul id="pw-rules" class="cm-pw-rules" aria-live="polite">
+                        <li data-rule="len">At least 8 characters</li>
+                        <li data-rule="upper">One uppercase letter</li>
+                        <li data-rule="lower">One lowercase letter</li>
+                        <li data-rule="digit">One number</li>
+                        <li data-rule="special">One of: ! @ # $ % ^ &amp; *</li>
+                    </ul>
+                    <p id="pw-error" class="cm-pw-error" role="alert"></p>
+                </div>
 
+                <button type="submit" class="cm-button cm-button-primary">
+                    Create account
+                </button>
 
-
-<main class="cm-main">
-
-
-<section class="cm-shell">
-
-<!-- INFO PANEL -->
-<aside class="cm-panel cm-panel-info">
-<h1 class="cm-title">Create Your Account 🚀</h1>
-<p class="cm-subtitle">
-Join CareerMatch AI and start receiving smart job matches based on your resume.
-</p>
-
-<ul class="cm-features">
-<li>Upload Resume Once</li>
-<li>80% Skill Matched Jobs</li>
-<li>Daily Job Recommendations</li>
-<li>Application Tracking</li>
-</ul>
-</aside>
-
-<!-- REGISTER FORM -->
-<section class="cm-panel cm-panel-form">
-{% if message %}
-    <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% else %}cm-alert-error{% endif %}">
-        {{ message }}
-    </div>
-{% endif %}
-<h2 class="cm-panel-title">Register</h2>
-
-<form action="/register" method="post" class="cm-form">
-
-    <div class="cm-field">
-        <label class="cm-label">Username</label>
-        <input type="text" name="name" required class="cm-input">
-    </div>
-
-    <div class="cm-field">
-        <label class="cm-label">Email</label>
-        <input type="email" name="email" required class="cm-input">
-    </div>
-
-    <div class="cm-field">
-        <label class="cm-label">Password</label>
-        <input type="password" name="password" required class="cm-input">
-    </div>
-
-    <button type="submit" class="cm-button cm-button-primary">
-        Register
-    </button>
-
-    <p class="cm-hint">
-Already have an account?
-<a href="/login">Login</a>
-</p>
-
-</form>
-
-
-
-</section>
+                <p class="cm-hint">
+                    Already have an account?
+                    <a href="/login">Sign in</a>
+                </p>
+            </form>
+        </section>
+    </section>
 </main>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+    var SPECIAL = "!@#$%^&*";
+    var form = document.getElementById("register-form");
+    var input = document.getElementById("reg-password");
+    var errEl = document.getElementById("pw-error");
+    if (!form || !input) return;
 
-</body>
-</html>
+    function checkPassword(pw) {
+        var hasSpecial = false;
+        for (var i = 0; i < pw.length; i++) {
+            if (SPECIAL.indexOf(pw[i]) !== -1) {
+                hasSpecial = true;
+                break;
+            }
+        }
+        return {
+            len: pw.length >= 8,
+            upper: /[A-Z]/.test(pw),
+            lower: /[a-z]/.test(pw),
+            digit: /\d/.test(pw),
+            special: hasSpecial
+        };
+    }
+
+    function allMet(r) {
+        return r.len && r.upper && r.lower && r.digit && r.special;
+    }
+
+    function refresh() {
+        var pw = input.value;
+        var items = form.querySelectorAll(".cm-pw-rules li");
+        if (pw.length === 0) {
+            items.forEach(function (li) {
+                li.classList.remove("is-met", "is-unmet");
+            });
+            form.classList.add("is-pw-invalid");
+            errEl.textContent = "";
+            return;
+        }
+        var r = checkPassword(pw);
+        items.forEach(function (li) {
+            var key = li.getAttribute("data-rule");
+            var ok = r[key];
+            li.classList.toggle("is-met", ok);
+            li.classList.toggle("is-unmet", !ok);
+        });
+        form.classList.toggle("is-pw-invalid", !allMet(r));
+        errEl.textContent = "";
+    }
+
+    input.addEventListener("input", refresh);
+
+    form.addEventListener("submit", function (e) {
+        var r = checkPassword(input.value);
+        if (!allMet(r)) {
+            e.preventDefault();
+            if (!r.len) errEl.textContent = "Password must be at least 8 characters.";
+            else if (!r.upper) errEl.textContent = "Include an uppercase letter.";
+            else if (!r.lower) errEl.textContent = "Include a lowercase letter.";
+            else if (!r.digit) errEl.textContent = "Include a number.";
+            else if (!r.special) errEl.textContent = "Include a special character (!@#$%^&*).";
+            input.focus();
+        }
+    });
+
+    refresh();
+})();
+</script>
+{% endblock %}

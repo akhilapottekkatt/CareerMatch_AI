@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Admin · Users{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/admin.css" />{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main">
+    <div class="cm-admin-wrap">
+        <nav class="cm-admin-local" aria-label="Admin sections">
+            <a href="/admin" class="cm-admin-local-link">Overview</a>
+            <a href="/admin/users" class="cm-admin-local-link cm-admin-local-link-active">Users</a>
+            <a href="/admin/jobs" class="cm-admin-local-link">Job suggestions</a>
+        </nav>
+
+        {% if message %}
+        <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% elif msg_type == 'error' %}cm-alert-error{% endif %}" role="status">{{ message }}</div>
+        {% endif %}
+
+        <section class="cm-panel cm-admin-panel">
+            <h1 class="cm-title cm-admin-title">Users</h1>
+            <p class="cm-subtitle">Promote or demote administrators (you cannot change your own role). Deleting a user removes their profile, resumes, suggestions, and applied records.</p>
+
+            <div class="cm-admin-table-wrap">
+                <table class="cm-admin-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Joined</th>
+                            <th scope="col">Admin</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <td>{{ u.id }}</td>
+                            <td>{{ u.email }}</td>
+                            <td>{{ u.username }}</td>
+                            <td>{{ (u.created_at or '')[:10] }}</td>
+                            <td>{% if u.is_admin %}Yes{% else %}No{% endif %}</td>
+                            <td class="cm-admin-actions-cell">
+                                {% if u.id != admin_id %}
+                                <form method="post" action="/admin/users/{{ u.id }}/toggle-admin" class="cm-admin-inline-form">
+                                    <button type="submit" class="cm-btn cm-btn-small">{% if u.is_admin %}Revoke admin{% else %}Make admin{% endif %}</button>
+                                </form>
+                                <form method="post" action="/admin/users/{{ u.id }}/delete" class="cm-admin-inline-form" onsubmit="return confirm('Delete user {{ u.email }} and all related data?');">
+                                    <button type="submit" class="cm-btn cm-btn-small cm-btn-danger">Delete</button>
+                                </form>
+                                {% else %}
+                                <span class="cm-admin-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

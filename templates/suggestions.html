@@ -1,100 +1,141 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CareerMatch AI · Suggestions</title>
-<link rel="stylesheet" href="/static/css/style.css">
-</head>
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Suggestions{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main">
+    <section class="cm-shell">
+        <div class="cm-panel" style="grid-column: 1 / -1; max-width: 780px; width: 100%; margin: 0 auto;">
+            <div class="cm-page-head">
+                <div>
+                    <h2 class="cm-panel-title">Today's job suggestions</h2>
+                    <p class="cm-page-lead">Ranked by match score. Open a role, apply externally, then mark it here.</p>
+                </div>
+            </div>
 
-<body>
-
-<header class="cm-header">
-<div class="cm-header-inner">
-<div class="cm-logo">
-<span class="cm-logo-mark">CM</span>
-<span class="cm-logo-text">CareerMatch AI</span>
-</div>
-
-<nav class="cm-nav">
-<a href="/dashboard" class="cm-nav-link">Dashboard</a>
-<a href="/applied" class="cm-nav-link">Applied Jobs</a>
-<a href="/suggestions" class="cm-nav-link cm-nav-link-active">Suggestions</a>
-<a href="/profile" class="cm-nav-link">Profile</a>
-</nav>
-</div>
-</header>
-
-<main class="cm-main">
-<section class="cm-shell">
-
-<div class="cm-panel">
-<h2 class="cm-panel-title">Today's AI Job Suggestions</h2>
-
-<div id="suggestionsContainer"></div>
-
-</div>
-
-</section>
+            <div id="suggestionsContainer" class="suggestions-list" aria-live="polite"></div>
+        </div>
+    </section>
 </main>
-
+{% endblock %}
+{% block scripts %}
 <script>
+function showSkeleton(container) {
+    container.innerHTML = `
+        <div class="cm-skeleton-stack" aria-hidden="true">
+            <div class="cm-skeleton-card"></div>
+            <div class="cm-skeleton-card"></div>
+            <div class="cm-skeleton-card"></div>
+        </div>
+        <p class="cm-muted" style="text-align:center;margin-top:0.75rem;">Loading suggestions…</p>
+    `;
+}
+
+function renderEmpty(container) {
+    container.innerHTML = `
+        <div class="cm-empty">
+            <div class="cm-empty-icon" aria-hidden="true">◇</div>
+            <h3>No suggestions yet</h3>
+            <p>Upload a resume from the dashboard to generate tailored job matches.</p>
+            <a href="/dashboard" class="cm-link-btn cm-link-btn-primary">Go to dashboard</a>
+        </div>
+    `;
+}
+
+function renderJobCard(job, container) {
+    const card = document.createElement("article");
+    card.className = "job-card";
+
+    const header = document.createElement("div");
+    header.className = "job-header";
+
+    const left = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "job-title";
+    title.textContent = job.role || "Suggested role";
+
+    if (job.company) {
+        const companyEl = document.createElement("div");
+        companyEl.className = "job-company";
+        companyEl.textContent = job.company;
+        left.appendChild(title);
+        left.appendChild(companyEl);
+    } else {
+        left.appendChild(title);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "job-meta";
+    const bits = [];
+    if (job.platform) bits.push(job.platform);
+    if (job.date) bits.push("Suggested " + job.date);
+    meta.textContent = bits.join(" · ");
+    if (meta.textContent) left.appendChild(meta);
+
+    const badge = document.createElement("span");
+    badge.className = "match-badge";
+    const score = job.match_score != null ? String(job.match_score) : "—";
+    badge.textContent = score + "% match";
+
+    header.appendChild(left);
+    header.appendChild(badge);
+    card.appendChild(header);
+
+    const actions = document.createElement("div");
+    actions.className = "job-card-actions";
+
+    if (job.apply_url) {
+        const link = document.createElement("a");
+        link.href = job.apply_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.className = "btn-view";
+        link.textContent = "View job";
+        actions.appendChild(link);
+    }
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cm-button cm-button-primary";
+    btn.textContent = "Mark as applied";
+    btn.addEventListener("click", function() {
+        markApplied(job.id);
+    });
+    actions.appendChild(btn);
+
+    card.appendChild(actions);
+    container.appendChild(card);
+}
+
 async function loadSuggestions() {
+    const container = document.getElementById("suggestionsContainer");
+    showSkeleton(container);
 
-const response = await fetch("/get_suggestions");
-const jobs = await response.json();
+    try {
+        const response = await fetch("/get_suggestions");
+        const jobs = await response.json();
 
-const container = document.getElementById("suggestionsContainer");
+        container.innerHTML = "";
 
-if (!jobs.length){
-container.innerHTML="<p>No suggestions available yet.</p>";
-return;
+        if (!jobs.length) {
+            renderEmpty(container);
+            return;
+        }
+
+        jobs.forEach(function(job) {
+            renderJobCard(job, container);
+        });
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<p class="cm-error-inline">Could not load suggestions. Please refresh.</p>`;
+    }
 }
 
-let html="";
-
-jobs.forEach(job=>{
-html+=`
-<div class="cm-card">
-<p><strong>Date Suggested:</strong> ${job.date}</p>
-
-<div class="cm-company-main">
-<span class="cm-company-name">
-${job.role} at ${job.company}
-</span>
-<span class="cm-status-badge">
-${job.match_score}% match
-</span>
-</div>
-
-<a href="${job.apply_url}" target="_blank"
-class="cm-link">View Job</a>
-
-<br><br>
-
-<button class="cm-button cm-button-primary"
-onclick="markApplied('${job.id}')">
-Applied ✅
-</button>
-
-</div>
-`;
-});
-
-container.innerHTML=html;
-}
-
-async function markApplied(jobId){
-
-await fetch("/mark_applied/"+jobId,{
-method:"POST"
-});
-
-location.reload();
+async function markApplied(jobId) {
+    await fetch("/mark_applied/" + encodeURIComponent(String(jobId)), {
+        method: "POST"
+    });
+    location.reload();
 }
 
 loadSuggestions();
 </script>
-
-</body>
-</html> 
+{% endblock %}

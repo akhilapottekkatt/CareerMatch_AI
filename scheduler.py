@@ -16,7 +16,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import models
 from database  import get_connection
 from resume_extracter import extract_text
-from company_matcher  import get_best_matching_companies_from_profile
+from company_matcher import (
+    gather_union_queries_from_profiles,
+    fetch_global_job_pool,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -241,11 +244,12 @@ def _send_notification_email(to_email: str, username: str, jobs: list):
 def refresh_all_users():
     """
     Called every hour by the scheduler.
-    For each user with an active resume:
-      1. Fetch fresh jobs
-      2. BERT match
-      3. Save suggestions
-      4. Send email notification
+
+    1. Build **one global job pool**: union of search queries from **all** user profiles,
+       fetch each query once, dedupe jobs.
+    2. **Batch BERT**: encode all jobs once, encode all resumes once, score every user
+       against every job (same pool).
+    3. Per user: replace unapplied suggestions with their top matches; optional email.
     """
     print(f"\n{'='*55}")
     print(f"⏰ Hourly job refresh started — {datetime.now().strftime('%d %b %Y %H:%M')}")
@@ -269,110 +273,86 @@ def refresh_all_users():
         print("ℹ️  No users with active resumes — skipping")
         return
 
-    print(f"👥 Found {len(rows)} user(s)\n")
+    print(f"👥 Found {len(rows)} user(s) with active resumes\n")
+
+    profiles_for_queries: list[dict] = []
+    resume_by_user: dict[int, str] = {}
+    row_by_user: dict[int, dict] = {}
+
+    for row in rows:
+        uid = row["user_id"]
+        row_by_user[uid] = dict(row)
+        profile = models.get_or_create_profile(uid)
+        profiles_for_queries.append({
+            "skills":         json.loads(profile.get("skills") or "[]"),
+            "expected_roles": json.loads(profile.get("expected_roles") or "[]"),
+        })
+
+        file_path = row["file_path"]
+        if not file_path or not os.path.exists(file_path):
+            print(f"  ⚠️  User {uid}: resume file missing — skip matching")
+            continue
+        text = extract_text(file_path)
+        if not text or len(text.strip()) < 50:
+            print(f"  ⚠️  User {uid}: could not extract resume text — skip matching")
+            continue
+        resume_by_user[uid] = text
+        print(f"  📄 User {uid}: {len(text)} chars from resume")
+
+    union_queries = gather_union_queries_from_profiles(profiles_for_queries)
+    if not union_queries:
+        print("ℹ️  No search queries from any profile (add skills or expected roles) — skipping")
+        return
+
+    global_jobs = fetch_global_job_pool(union_queries, location="India", max_jobs=300)
+    if not global_jobs:
+        print("⚠️  Global job pool empty — skipping")
+        return
+
+    if not resume_by_user:
+        print("⚠️  No resume text for any user — skipping BERT")
+        return
+
+    print(f"\n🤖 Batch matching {len(global_jobs)} jobs × {len(resume_by_user)} user(s)...")
+    matched = models.match_jobs_batch_users(
+        resume_by_user,
+        global_jobs,
+        threshold=0.2,
+        top_k=50,
+    )
+
+    # Optional job_type filter (same behaviour as per-user fetch)
+    for uid in list(matched.keys()):
+        profile = models.get_or_create_profile(uid)
+        jt = (profile.get("job_type") or "").strip()
+        if jt and jt.lower() != "any":
+            jlist = matched[uid]
+            filt = [j for j in jlist if jt.lower() in (j.get("job_type", "") or "").lower()]
+            matched[uid] = filt if filt else jlist
 
     success = 0
     failed  = 0
 
-    for row in rows:
-        user_id   = row["user_id"]
-        email     = row["email"]
-        username  = row["username"]
-        resume_id = row["resume_id"]
-        file_path = row["file_path"]
+    for uid, text in resume_by_user.items():
+        email    = row_by_user[uid]["email"]
+        username = row_by_user[uid]["username"]
+        jobs     = matched.get(uid) or []
 
-        print(f"─── User {user_id} ({email}) ───────────────────────")
+        print(f"─── User {uid} ({email}) — {len(jobs)} suggestions above threshold ───")
 
         try:
-            new_jobs = _refresh_user(user_id, resume_id, file_path)
-
-            # Send email only if we got new jobs
-            if new_jobs:
-                _send_notification_email(email, username, new_jobs)
-
+            models.delete_unapplied_suggestions(uid)
+            if jobs:
+                models.insert_job_suggestions(uid, jobs)
+                _send_notification_email(email, username, jobs)
             success += 1
-
         except Exception as e:
-            print(f"  ❌ Failed for user {user_id}: {e}")
+            print(f"  ❌ Save/email failed for user {uid}: {e}")
             failed += 1
 
     print(f"\n{'='*55}")
-    print(f"✅ Refresh done — {success} success, {failed} failed")
+    print(f"✅ Global refresh done — {success} user(s) updated, {failed} failed")
     print(f"{'='*55}\n")
-
-
-def _refresh_user(user_id: int, resume_id: int, file_path: str) -> list:
-    """
-    Refresh job suggestions for one user.
-    Returns the list of new jobs saved (empty list if nothing saved).
-    """
-
-    # ── Step 1: Check file exists ──
-    if not file_path or not os.path.exists(file_path):
-        print(f"  ⚠️  Resume file not found — skipping")
-        return []
-
-    # ── Step 2: Extract text ──
-    text = extract_text(file_path)
-    if not text or len(text.strip()) < 50:
-        print(f"  ⚠️  Could not extract text — skipping")
-        return []
-
-    print(f"  📄 {len(text)} chars extracted")
-
-    # ── Step 3: Build profile ──
-    profile = models.get_or_create_profile(user_id)
-    full_profile = {
-        "skills":             json.loads(profile.get("skills")         or "[]"),
-        "experience_years":   profile.get("experience_years",          0),
-        "expected_roles":     json.loads(profile.get("expected_roles") or "[]"),
-        "preferred_location": profile.get("preferred_location",        ""),
-        "job_type":           profile.get("job_type",                  ""),
-    }
-
-    if not full_profile["skills"] and not full_profile["expected_roles"]:
-        print(f"  ⚠️  No skills or roles — skipping")
-        return []
-
-    print(f"  ⚡ {len(full_profile['skills'])} skills found")
-
-    # ── Step 4: Fetch jobs ──
-    print(f"  🔍 Fetching jobs...")
-    raw_jobs = get_best_matching_companies_from_profile(full_profile, limit=100)
-    print(f"  📦 {len(raw_jobs)} raw jobs fetched")
-
-    if not raw_jobs:
-        print(f"  ⚠️  No jobs fetched — keeping existing suggestions")
-        return []
-
-    # ── Step 5: BERT match ──
-    best_matches = models.match_jobs_to_resume(text, raw_jobs, threshold=0.2)
-    if not best_matches:
-        best_matches = raw_jobs[:50]
-        print(f"  ℹ️  BERT fallback — using top 50 raw jobs")
-
-    print(f"  🎯 {len(best_matches)} matched jobs")
-
-    # ── Step 6: Save — only deletes unapplied, keeps applied ──
-    
-    # ── Step 6: Save WITHOUT deleting old + avoid duplicates ──
-
-    # Get already stored job URLs
-    existing_jobs = models.get_suggestions(user_id)
-    existing_urls = {j["apply_url"] for j in existing_jobs if j.get("apply_url")}
-
-    # Filter only NEW jobs
-    new_jobs = [j for j in best_matches if j.get("url") not in existing_urls]
-
-    if not new_jobs:
-        print("  ℹ️ No new jobs — skipping save")
-        return []
-
-    # Save only new jobs
-    models.insert_job_suggestions(user_id, new_jobs)
-
-    print(f"  💾 Saved {len(new_jobs)} NEW suggestions (no duplicates)")
-    return new_jobs
 
 
 # ═══════════════════════════════════════════════════════════════════

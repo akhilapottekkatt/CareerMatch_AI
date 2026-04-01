@@ -1,94 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CareerMatch AI · Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-
-<body>
-
-<header class="cm-header">
-    <div class="cm-header-inner">
-        <div class="cm-logo">
-            <span class="cm-logo-mark">CM</span>
-            <span class="cm-logo-text">CareerMatch AI</span>
-        </div>
-        <nav class="cm-nav">
-            <a href="/dashboard"   class="cm-nav-link cm-nav-link-active">Dashboard</a>
-            <a href="/suggestions" class="cm-nav-link">Suggestions</a>
-            <a href="/applied"     class="cm-nav-link">Applied Jobs</a>
-            <a href="/profile"     class="cm-nav-link">Profile</a>
-            <a href="/logout"      class="cm-nav-link">Logout</a>
-        </nav>
-    </div>
-</header>
-
-<main class="cm-main">
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Dashboard{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main">
     <section class="cm-shell">
-
-        <!-- ── Left panel: info ── -->
         <aside class="cm-panel cm-panel-info">
-            <h1 class="cm-title">Smart job applications, powered by your resume.</h1>
+            <h1 class="cm-title">Smart job matching from your resume</h1>
             <p class="cm-subtitle">
                 Upload your latest resume and let CareerMatch AI extract your skills,
-                search leading job platforms, and find tailored job matches for you.
+                search leading job platforms, and surface tailored matches.
             </p>
             <ul class="cm-features">
-                <li>Parse skills and experience from your PDF resume</li>
-                <li>Search LinkedIn, Indeed, Naukri and more</li>
-                <li>Get ranked job suggestions with match scores</li>
-                <li>Receive daily email summaries of best matches</li>
+                <li>Parse skills and experience from PDF or DOCX</li>
+                <li>Search LinkedIn, Indeed, Naukri, and more</li>
+                <li>Ranked suggestions with match scores</li>
+                <li>Optional email summaries of top matches</li>
             </ul>
         </aside>
 
-        <!-- ── Right panel: upload form ── -->
         <section class="cm-panel cm-panel-form">
-            <h2 class="cm-panel-title">Upload resume &amp; start matching</h2>
+            <h2 class="cm-panel-title">Upload resume</h2>
             <p class="cm-panel-description">
-                Upload your PDF resume — we will extract your skills and find the best
-                matching jobs across multiple platforms.
+                Upload your resume — we parse it and open your profile for review. Confirm your details there, then we run job matching.
             </p>
 
-            <!-- Profile nudge banner -->
-            <div style="
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 0.75rem 1rem;
-                background: rgba(124,58,237,0.08);
-                border: 1px solid rgba(124,58,237,0.2);
-                border-radius: 12px;
-                margin-bottom: 1.25rem;
-            ">
-                <div>
-                    <div style="font-weight:600;font-size:0.9rem;">Complete your profile</div>
-                    <div style="font-size:0.75rem;color:#94A3B8;">
-                        Add job preferences and expected roles for better matches
-                    </div>
+            <div class="cm-banner">
+                <div class="cm-banner-text">
+                    <strong>Complete your profile</strong>
+                    <span>Add preferences and target roles for better matches.</span>
                 </div>
-                <a href="/profile" style="
-                    padding: 0.45rem 1rem;
-                    border-radius: 8px;
-                    background: linear-gradient(135deg, #2563EB, #7C3AED);
-                    color: white;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    text-decoration: none;
-                ">Go to Profile →</a>
+                <div class="cm-banner-actions">
+                    <a href="/profile" class="cm-link-btn">Go to profile</a>
+                </div>
             </div>
 
-            <!-- Upload form -->
-            <!-- FIX: form no longer has email field (was crashing JS) -->
             <form id="uploadForm" class="cm-form">
-                <div class="cm-field">
+                <div class="cm-field cm-field-file">
                     <label for="resume" class="cm-label">Resume (PDF or DOCX)</label>
                     <input type="file" id="resume" accept="application/pdf,.docx" required class="cm-input">
                 </div>
 
                 <button type="submit" class="cm-button cm-button-primary">
-                    Upload &amp; Find Matching Jobs
+                    Upload &amp; parse resume
                 </button>
 
                 <p class="cm-hint">
@@ -96,20 +48,26 @@
                 </p>
             </form>
 
-            <!-- Results area -->
-            <section id="result" class="cm-results cm-results-empty">
+            <section id="result" class="cm-results cm-results-empty" aria-live="polite">
                 <p class="cm-placeholder">
-                    Results will appear here after you upload your resume.
+                    After upload you will be redirected to your profile to review parsed data.
                 </p>
             </section>
-
         </section>
     </section>
 </main>
-
+{% endblock %}
+{% block scripts %}
 <script>
-document.getElementById("uploadForm")
-.addEventListener("submit", async function(e) {
+const pendingFromServer = {{ (pending_resume_json or None) | tojson }};
+
+function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+}
+
+document.getElementById("uploadForm").addEventListener("submit", async function(e) {
     e.preventDefault();
 
     const fileInput = document.getElementById("resume");
@@ -120,17 +78,15 @@ document.getElementById("uploadForm")
         return;
     }
 
-    // Build form data — only file + optional label
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
     formData.append("label", "Dashboard Upload");
 
-    // Show loading state
     resultDiv.classList.remove("cm-results-empty");
     resultDiv.innerHTML = `
         <div class="cm-loading">
-            <div class="cm-spinner"></div>
-            <p>Analysing your resume and fetching matching jobs...</p>
+            <div class="cm-spinner" role="status" aria-label="Loading"></div>
+            <p>Reading and parsing your resume…</p>
         </div>
     `;
 
@@ -140,74 +96,48 @@ document.getElementById("uploadForm")
             body: formData
         });
 
-        // FIX: handle non-OK responses cleanly
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             resultDiv.innerHTML = `
                 <div class="cm-error">
                     <h3>Upload failed</h3>
-                    <p>${err.error || "Something went wrong. Please try again."}</p>
+                    <p>${esc(err.error || "Something went wrong. Please try again.")}</p>
                 </div>
             `;
             return;
         }
 
         const data = await response.json();
-        const skillCount = (data.skills || []).length;
-        const jobCount   = (data.jobs   || []).length;
+        if (!data.success || !data.pending_confirmation) {
+            resultDiv.innerHTML = `<div class="cm-error"><p>Unexpected response from server.</p></div>`;
+            return;
+        }
 
-        // FIX: removed dead code referencing undefined "best" and "html" variables
-        // Show clean success card and redirect to suggestions
-        resultDiv.classList.remove("cm-results-empty");
-        resultDiv.innerHTML = `
-            <div class="cm-card" style="text-align:center;padding:2rem;">
-                <div style="font-size:2.5rem;margin-bottom:1rem;">✅</div>
-                <h3 style="margin-bottom:0.5rem;">Resume Parsed Successfully!</h3>
-                <p style="color:#94A3B8;margin-bottom:0.4rem;">
-                    Extracted <strong style="color:white;">${skillCount} skills</strong>
-                    · Found <strong style="color:white;">${jobCount} matching jobs</strong>
-                </p>
-                <p style="color:#94A3B8;margin-bottom:1.5rem;font-size:0.875rem;">
-                    Your job suggestions are ready. You can also review your profile
-                    to improve match accuracy.
-                </p>
-                <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
-                    <a href="/suggestions" style="
-                        display:inline-block;
-                        padding:0.75rem 1.75rem;
-                        border-radius:10px;
-                        background:linear-gradient(135deg,#2563EB,#7C3AED);
-                        color:white;
-                        font-weight:600;
-                        text-decoration:none;
-                        font-size:0.9rem;
-                    ">View Job Suggestions →</a>
-                    <a href="/profile" style="
-                        display:inline-block;
-                        padding:0.75rem 1.75rem;
-                        border-radius:10px;
-                        background:transparent;
-                        border:1px solid rgba(124,58,237,0.4);
-                        color:#A78BFA;
-                        font-weight:600;
-                        text-decoration:none;
-                        font-size:0.9rem;
-                    ">Review Profile</a>
-                </div>
-            </div>
-        `;
-
+        window.location.href = "/profile";
     } catch (err) {
         console.error("Upload error:", err);
         resultDiv.innerHTML = `
             <div class="cm-error">
                 <h3>Unexpected error</h3>
-                <p>Please check your internet connection and try again.</p>
+                <p>Please check your connection and try again.</p>
             </div>
         `;
     }
 });
-</script>
 
-</body>
-</html>
+(function() {
+    const resultDiv = document.getElementById("result");
+    if (pendingFromServer && pendingFromServer.resume_id) {
+        resultDiv.classList.remove("cm-results-empty");
+        resultDiv.innerHTML = `
+            <div class="cm-card cm-success-card cm-success-card--soft">
+                <p class="cm-muted" style="margin:0 0 0.75rem;">
+                    You have a parsed resume waiting for confirmation on your profile.
+                </p>
+                <a href="/profile" class="cm-link-btn cm-link-btn-primary">Go to profile</a>
+            </div>
+        `;
+    }
+})();
+</script>
+{% endblock %}

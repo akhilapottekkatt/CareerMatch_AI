@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Admin{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/admin.css" />{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main">
+    <div class="cm-admin-wrap">
+        <nav class="cm-admin-local" aria-label="Admin sections">
+            <a href="/admin" class="cm-admin-local-link cm-admin-local-link-active">Overview</a>
+            <a href="/admin/users" class="cm-admin-local-link">Users</a>
+            <a href="/admin/jobs" class="cm-admin-local-link">Job suggestions</a>
+        </nav>
+
+        {% if message %}
+        <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% elif msg_type == 'error' %}cm-alert-error{% endif %}" role="status">{{ message }}</div>
+        {% endif %}
+
+        <section class="cm-panel cm-admin-panel">
+            <h1 class="cm-title cm-admin-title">Administration</h1>
+            <p class="cm-subtitle">System overview and shortcuts. Grant admin access via <code class="cm-code">ADMIN_EMAILS</code> in the environment, or promote users below (Users).</p>
+
+            <ul class="cm-admin-stats">
+                <li><span class="cm-admin-stat-val">{{ admin_stats.users }}</span> registered users</li>
+                <li><span class="cm-admin-stat-val">{{ admin_stats.job_suggestions }}</span> job suggestions (all users)</li>
+                <li><span class="cm-admin-stat-val">{{ admin_stats.applied_jobs }}</span> applied job records</li>
+                <li><span class="cm-admin-stat-val">{{ admin_stats.resumes }}</span> resumes stored</li>
+            </ul>
+
+            <div class="cm-admin-actions">
+                <a class="cm-link-btn" href="/admin/users">Manage users</a>
+                <a class="cm-link-btn" href="/admin/jobs">Manage job suggestions</a>
+                <a class="cm-link-btn cm-link-btn-ghost" href="/scheduler-status" target="_blank" rel="noopener">Scheduler status (JSON)</a>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

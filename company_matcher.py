@@ -3,7 +3,7 @@
 Fetches real jobs from multiple sources and computes
 a real match score for each job against candidate skills.
 """
-from job_links import scrape_jsearch, scrape_remoteok
+from job_links import scrape_jsearch, scrape_remoteok, scrape_linkedin
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -75,6 +75,113 @@ def build_queries(skills: list, expected_roles: list = []) -> list:
     for q in unique:
         print(f"   → {q}")
 
+    return unique
+
+
+def build_queries_for_profile(skills: list, expected_roles: list, max_queries: int = 25) -> list:
+    """
+    Prefer **expected job roles** (profile "expected_roles") as search queries.
+    If none are set, fall back to skill-derived queries from `build_queries`.
+    """
+    roles: list[str] = []
+    for r in expected_roles or []:
+        r = (r or "").strip()
+        if r:
+            roles.append(r)
+    seen: set[str] = set()
+    unique_roles: list[str] = []
+    for r in roles:
+        k = r.lower()
+        if k not in seen:
+            seen.add(k)
+            unique_roles.append(r)
+    if unique_roles:
+        print(f"🔎 Using {len(unique_roles)} expected job profile(s) as search queries (skills used only for scoring)")
+        return unique_roles[:max_queries]
+    return build_queries(skills, [])[:max_queries]
+
+
+def gather_union_queries_from_profiles(profiles: list[dict]) -> list[str]:
+    """
+    Build a deduplicated list of search strings from many user profiles
+    (expected roles + skill-derived queries per `build_queries_for_profile`).
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for fp in profiles:
+        skills = fp.get("skills") or []
+        roles = fp.get("expected_roles") or []
+        if not skills and not roles:
+            continue
+        for q in build_queries_for_profile(skills, roles):
+            ql = q.lower().strip()
+            if ql and ql not in seen:
+                seen.add(ql)
+                out.append(q)
+    return out
+
+
+def _normalize_job_row(job: dict) -> dict:
+    return {
+        "title":       job.get("title", ""),
+        "company":     job.get("company", ""),
+        "platform":    job.get("platform", ""),
+        "apply_url":   job.get("url") or job.get("apply_url", ""),
+        "location":    job.get("location", ""),
+        "description": job.get("description", ""),
+        "salary":      job.get("salary", ""),
+        "job_type":    job.get("job_type", ""),
+        "posted":      job.get("posted", ""),
+        "match_score": 0.0,
+    }
+
+
+def fetch_global_job_pool(
+    queries: list[str],
+    location: str = "India",
+    max_jobs: int = 300,
+) -> list:
+    """
+    Fetch jobs once per unique query, merge, dedupe by apply_url.
+    Used by the scheduler so **all users share one job pool**, then each user
+    is scored against every job in that pool.
+    """
+    if not queries:
+        return []
+
+    print(f"\n🌐 Global job pool — {len(queries)} unique search query/queries, location={location!r}")
+
+    all_jobs: list = []
+    for query in queries:
+        print(f"\n🔍 [Pool] Fetching jobs for: '{query}'")
+        try:
+            jsearch_jobs = scrape_jsearch(query, location=location, num_pages=2)
+            all_jobs.extend(jsearch_jobs)
+        except Exception as e:
+            print(f"  ❌ JSearch failed: {e}")
+        try:
+            all_jobs.extend(scrape_remoteok(query))
+        except Exception as e:
+            print(f"  ❌ RemoteOK failed: {e}")
+        try:
+            li = scrape_linkedin(query, location=location, pages=1)
+            all_jobs.extend(li)
+            print(f"  ✅ LinkedIn: {len(li)} jobs")
+        except Exception as e:
+            print(f"  ❌ LinkedIn failed: {e}")
+
+    normalized = [_normalize_job_row(j) for j in all_jobs]
+    seen: set[str] = set()
+    unique: list = []
+    for job in normalized:
+        url = job["apply_url"]
+        if url and url not in seen:
+            seen.add(url)
+            unique.append(job)
+
+    if len(unique) > max_jobs:
+        unique = unique[:max_jobs]
+    print(f"\n✅ Global pool: {len(unique)} unique jobs (cap {max_jobs})")
     return unique
 
 
@@ -165,13 +272,8 @@ def get_best_matching_companies_from_profile(profile: dict, limit: int = 50) -> 
     if not skills and not expected_roles:
         return []
 
-    # Build queries from both skills AND expected roles
-    all_queries = build_queries(skills)
-
-    # Add expected roles as extra queries
-    for role in expected_roles[:3]:
-        if role and role not in all_queries:
-            all_queries.append(role)
+    # Search queries: expected job profiles first; else skill-derived queries
+    all_queries = build_queries_for_profile(skills, expected_roles)
 
     all_jobs = []
 
@@ -190,6 +292,12 @@ def get_best_matching_companies_from_profile(profile: dict, limit: int = 50) -> 
             all_jobs.extend(remote_jobs)
         except Exception as e:
             print(f"  ❌ RemoteOK failed: {e}")
+        try:
+            li_jobs = scrape_linkedin(query, location=location, pages=1)
+            all_jobs.extend(li_jobs)
+            print(f"  ✅ LinkedIn: {len(li_jobs)} jobs")
+        except Exception as e:
+            print(f"  ❌ LinkedIn failed: {e}")
 
     # Normalize
     normalized = []

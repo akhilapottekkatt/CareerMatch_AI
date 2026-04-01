@@ -4,9 +4,28 @@ Pure sqlite3 database setup.
 No SQLAlchemy — creates all tables that models.py uses.
 """
 
+import os
 import sqlite3
 
 DB_NAME = "users.db"
+
+
+def sync_admins_from_env():
+    """
+    Promote users listed in ADMIN_EMAILS or ADMIN_EMAIL (comma-separated) to is_admin=1.
+    Set in the environment before starting the app (e.g. ADMIN_EMAILS=you@corp.com).
+    """
+    raw = os.getenv("ADMIN_EMAILS") or os.getenv("ADMIN_EMAIL") or ""
+    emails = [e.strip().lower() for e in raw.split(",") if e.strip()]
+    if not emails:
+        return
+    conn = get_connection()
+    try:
+        for em in emails:
+            conn.execute("UPDATE users SET is_admin = 1 WHERE email = ?", (em,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ─────────────────────────────────────────
@@ -42,10 +61,12 @@ def create_users_table():
 
         -- ── Users ──────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS users (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT    NOT NULL,
-            email    TEXT    UNIQUE NOT NULL,
-            password TEXT    NOT NULL
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT NOT NULL,
+            email      TEXT UNIQUE NOT NULL,
+            password   TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            is_admin   INTEGER DEFAULT 0
         );
 
         -- ── User Profiles ───────────────────────────────────────
@@ -99,7 +120,8 @@ def create_users_table():
             graduation_year  TEXT,
             experience_years REAL    DEFAULT 0.0,
 
-            created_at       TEXT DEFAULT (datetime('now'))
+            created_at         TEXT DEFAULT (datetime('now')),
+            profile_confirmed  INTEGER DEFAULT 0   -- 0 = user must confirm parsed data before matching
         );
 
         
@@ -133,6 +155,27 @@ def create_users_table():
         );
 
     """)
+
+    # Existing DBs may predate created_at on users — add column if missing.
+    rows = conn.execute("PRAGMA table_info(users)").fetchall()
+    column_names = [r[1] for r in rows]
+    if column_names and "created_at" not in column_names:
+        # SQLite ALTER cannot use datetime('now') as a column default; backfill after add.
+        conn.execute("ALTER TABLE users ADD COLUMN created_at TEXT")
+        conn.execute(
+            "UPDATE users SET created_at = datetime('now') WHERE created_at IS NULL"
+        )
+
+    resume_rows = conn.execute("PRAGMA table_info(resumes)").fetchall()
+    resume_cols = [r[1] for r in resume_rows]
+    if resume_cols and "profile_confirmed" not in resume_cols:
+        conn.execute("ALTER TABLE resumes ADD COLUMN profile_confirmed INTEGER DEFAULT 0")
+        conn.execute("UPDATE resumes SET profile_confirmed = 1")
+
+    user_rows = conn.execute("PRAGMA table_info(users)").fetchall()
+    user_cols = [r[1] for r in user_rows]
+    if user_cols and "is_admin" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()

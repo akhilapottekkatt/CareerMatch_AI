@@ -5,7 +5,9 @@ Converted from SQLAlchemy — all original tables and functions preserved.
 BERT cosine matching is kept and fixed (lazy load + returns full job dicts).
 """
 
+import glob
 import json
+import os
 from datetime import datetime
 from database import get_connection
 
@@ -17,6 +19,7 @@ def create_user(email: str, password: str, username: str = "") -> int:
     """
     Create a new user and return user_id
     """
+    from auth import hash_password
 
     conn = get_connection()
     try:
@@ -25,7 +28,7 @@ def create_user(email: str, password: str, username: str = "") -> int:
             VALUES (?, ?, ?, datetime('now'))
         """, (
             email.lower().strip(),
-            password,
+            hash_password(password),
             username or email.split("@")[0]   # default username
         ))
         conn.commit()
@@ -79,6 +82,157 @@ def get_user_by_id(user_id: int) -> dict:
             "SELECT * FROM users WHERE id = ?", (user_id,)
         ).fetchone()
         return _row(row)
+    finally:
+        conn.close()
+
+
+def list_users_admin() -> list:
+    """All users without password — for admin UI."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT id, username, email, created_at, IFNULL(is_admin, 0) AS is_admin
+               FROM users ORDER BY id ASC"""
+        ).fetchall()
+        return [_row(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def set_user_admin(user_id: int, is_admin: int) -> bool:
+    """Set is_admin to 0 or 1. Returns True if a row was updated."""
+    conn = get_connection()
+    try:
+        n = conn.execute(
+            "UPDATE users SET is_admin = ? WHERE id = ?",
+            (1 if is_admin else 0, user_id),
+        ).rowcount
+        conn.commit()
+        return n > 0
+    finally:
+        conn.close()
+
+
+def admin_delete_user_cascade(target_user_id: int) -> None:
+    """
+    Remove user and all related rows. Caller must ensure actor is not deleting self.
+    Deletes resume files and parsed JSON caches for this user when present.
+    """
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT file_path FROM resumes WHERE user_id = ?", (target_user_id,)
+        ).fetchall()
+        for r in rows:
+            fp = r["file_path"]
+            if fp and os.path.isfile(fp):
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+
+        conn.execute("DELETE FROM applied_jobs WHERE user_id = ?", (target_user_id,))
+        conn.execute("DELETE FROM job_suggestions WHERE user_id = ?", (target_user_id,))
+        conn.execute("DELETE FROM resumes WHERE user_id = ?", (target_user_id,))
+        conn.execute("DELETE FROM user_profiles WHERE user_id = ?", (target_user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    for path in glob.glob(f"parsed_resumes_{target_user_id}_*.json"):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    legacy = f"parsed_resumes_{target_user_id}.json"
+    if os.path.isfile(legacy):
+        try:
+            os.remove(legacy)
+        except OSError:
+            pass
+    for path in glob.glob(f"static/profile_pics/user_{target_user_id}.*"):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def admin_stats() -> dict:
+    conn = get_connection()
+    try:
+        n_users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+        n_suggestions = conn.execute("SELECT COUNT(*) AS c FROM job_suggestions").fetchone()["c"]
+        n_applied = conn.execute("SELECT COUNT(*) AS c FROM applied_jobs").fetchone()["c"]
+        n_resumes = conn.execute("SELECT COUNT(*) AS c FROM resumes").fetchone()["c"]
+        return {
+            "users": n_users,
+            "job_suggestions": n_suggestions,
+            "applied_jobs": n_applied,
+            "resumes": n_resumes,
+        }
+    finally:
+        conn.close()
+
+
+def admin_list_job_suggestions(
+    limit: int = 50,
+    offset: int = 0,
+    user_id: int | None = None,
+) -> list:
+    conn = get_connection()
+    try:
+        if user_id is not None:
+            rows = conn.execute(
+                """
+                SELECT js.*, u.email AS user_email, u.username AS user_username
+                FROM job_suggestions js
+                JOIN users u ON u.id = js.user_id
+                WHERE js.user_id = ?
+                ORDER BY js.date_suggested DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, limit, offset),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT js.*, u.email AS user_email, u.username AS user_username
+                FROM job_suggestions js
+                JOIN users u ON u.id = js.user_id
+                ORDER BY js.date_suggested DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ).fetchall()
+        return [_row(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def admin_count_job_suggestions(user_id: int | None = None) -> int:
+    conn = get_connection()
+    try:
+        if user_id is not None:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM job_suggestions WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT COUNT(*) AS c FROM job_suggestions").fetchone()
+        return int(row["c"])
+    finally:
+        conn.close()
+
+
+def admin_delete_job_suggestion(suggestion_id: int) -> bool:
+    conn = get_connection()
+    try:
+        n = conn.execute(
+            "DELETE FROM job_suggestions WHERE id = ?", (suggestion_id,)
+        ).rowcount
+        conn.commit()
+        return n > 0
     finally:
         conn.close()
 
@@ -157,6 +311,41 @@ def get_latest_resume(user_id: int) -> dict:
         conn.close()
 
 
+def get_pending_resume(user_id: int) -> dict:
+    """Latest resume waiting for user confirmation (profile_confirmed = 0)."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """SELECT * FROM resumes WHERE user_id = ? AND IFNULL(profile_confirmed, 0) = 0
+               ORDER BY id DESC LIMIT 1""",
+            (user_id,),
+        ).fetchone()
+        return _row(row)
+    finally:
+        conn.close()
+
+
+def update_resume_record(resume_id: int, user_id: int, fields: dict) -> bool:
+    """Update resume columns; only allowed keys. Returns True if a row was updated."""
+    allowed = {
+        "label", "role", "summary", "experience", "highest_degree", "institution",
+        "graduation_year", "experience_years", "profile_confirmed", "is_active",
+    }
+    safe = {k: v for k, v in fields.items() if k in allowed}
+    if not safe:
+        return False
+    conn = get_connection()
+    try:
+        n = conn.execute(
+            f"UPDATE resumes SET {', '.join(f'{k} = ?' for k in safe)} WHERE id = ? AND user_id = ?",
+            list(safe.values()) + [resume_id, user_id],
+        ).rowcount
+        conn.commit()
+        return n > 0
+    finally:
+        conn.close()
+
+
 def get_resume_by_id(resume_id: int, user_id: int) -> dict:
     conn = get_connection()
     try:
@@ -188,8 +377,9 @@ def insert_resume(user_id: int, data: dict) -> int:
         cursor = conn.execute("""
             INSERT INTO resumes
                 (user_id, file_path, label, role, summary, experience,
-                 is_active, highest_degree, institution, graduation_year, experience_years)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                 is_active, highest_degree, institution, graduation_year, experience_years,
+                 profile_confirmed)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
         """, (
             user_id,
             data.get("file_path",        ""),
@@ -201,6 +391,7 @@ def insert_resume(user_id: int, data: dict) -> int:
             data.get("institution",      ""),
             data.get("graduation_year",  ""),
             data.get("experience_years", 0.0),
+            int(data.get("profile_confirmed", 0)),
         ))
         conn.commit()
         return cursor.lastrowid
@@ -553,4 +744,68 @@ def match_jobs_to_resume(resume_text: str, jobs: list, threshold: float = 0.2) -
         print(f"🏆 Top: {results[0].get('title')} @ {results[0].get('company')} — {results[0].get('match_pct')}")
 
     return results
+
+
+def match_jobs_batch_users(
+    resume_by_user: dict[int, str],
+    jobs: list,
+    threshold: float = 0.2,
+    top_k: int = 50,
+) -> dict[int, list]:
+    """
+    Score **every job** in ``jobs`` against **every user** resume in one batched embedding pass:
+    - Job texts encoded once.
+    - User resume texts encoded in batch.
+    - Cosine similarity matrix (users × jobs), then per-user top_k above threshold.
+
+    Returns ``{ user_id: [ job dicts with match_score, apply_url, ... ] }``.
+    """
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    out: dict[int, list] = {uid: [] for uid in resume_by_user}
+
+    if not jobs or not resume_by_user:
+        return out
+
+    user_ids = [uid for uid, text in resume_by_user.items() if (text or "").strip()]
+    if not user_ids:
+        return out
+
+    model = _get_model()
+
+    job_texts = [
+        (
+            (j.get("title", "") or "")
+            + " "
+            + (j.get("description", "") or "")
+            + " "
+            + (j.get("company", "") or "")
+        ).strip()
+        for j in jobs
+    ]
+    job_embs = model.encode(job_texts)
+
+    resume_texts = [resume_by_user[uid] for uid in user_ids]
+    resume_embs = model.encode(resume_texts)
+
+    sims = cosine_similarity(resume_embs, job_embs)
+
+    for i, uid in enumerate(user_ids):
+        row = sims[i]
+        picked: list = []
+        for j, score in enumerate(row):
+            if float(score) >= threshold:
+                picked.append({
+                    **jobs[j],
+                    "match_score": round(float(score), 3),
+                    "match_pct":   f"{float(score):.0%}",
+                })
+        picked.sort(key=lambda x: x["match_score"], reverse=True)
+        out[uid] = picked[:top_k]
+
+    print(
+        f"✅ Batch BERT: {len(user_ids)} user(s) × {len(jobs)} jobs "
+        f"(threshold={threshold}, top_k={top_k} per user)"
+    )
+    return out
 

@@ -7,14 +7,13 @@ All DB calls go through models.py helper functions.
 
 
 from datetime import datetime
-from utils import is_strong_password
 from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from database import create_users_table
+from database import create_users_table, sync_admins_from_env
 from auth import create_user, authenticate_user
 from resume_extracter import extract_text
 from resume_parser import parse_resume
@@ -40,6 +39,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 create_users_table()   # creates all tables on every startup — safe, uses IF NOT EXISTS
+sync_admins_from_env() # ADMIN_EMAILS / ADMIN_EMAIL → grant is_admin
 
 
 # ── Start scheduler on startup, stop cleanly on shutdown ──────────
@@ -70,17 +70,54 @@ def _require_login(request: Request):
     return user if user else None
 
 
+def _template_ctx(request: Request, **kwargs):
+    """Merge Jinja context with is_admin for nav (base.html)."""
+    u = _current_user(request)
+    base = {
+        "request": request,
+        "is_admin": bool(int(u.get("is_admin") or 0)) if u else False,
+    }
+    base.update(kwargs)
+    return base
+
+
+def _require_admin(request: Request):
+    """Logged-in user with is_admin=1, else None."""
+    user = _require_login(request)
+    if not user:
+        return None
+    if not int(user.get("is_admin") or 0):
+        return None
+    return user
+
+
+def _ensure_admin(request: Request):
+    """
+    Returns (admin_user_dict, None) or (None, RedirectResponse).
+    Use: admin, redir = _ensure_admin(request); if redir: return redir
+    """
+    user = _require_login(request)
+    if not user:
+        return None, RedirectResponse("/login", status_code=303)
+    if not int(user.get("is_admin") or 0):
+        request.session["message"] = "You do not have access to the admin area."
+        request.session["msg_type"] = "error"
+        return None, RedirectResponse("/dashboard", status_code=303)
+    return user, None
+
+
 # ═══════════════════════════════════════════════════════════════════
 # REGISTER
 # ═══════════════════════════════════════════════════════════════════
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return templates.TemplateResponse("register.html", {
-        "request":  request,
-        "message":  request.session.pop("message",  None),
-        "msg_type": request.session.pop("msg_type", None),
-    })
+    return templates.TemplateResponse("register.html", _template_ctx(
+        request,
+        message=request.session.pop("message", None),
+        msg_type=request.session.pop("msg_type", None),
+        active_nav=None,
+    ))
 
 
 
@@ -101,29 +138,22 @@ async def register(
 ):
     # Check duplicate email
     if models.user_exists(email):
-        return templates.TemplateResponse("register.html", {
-            "request": request,
-            "message": "Email already exists",
-            "msg_type": "error"
-        })
-
-    # Password validation
-    valid, msg = is_strong_password(password)
-    if not valid:
-        return templates.TemplateResponse("register.html", {
-            "request": request,
-            "message": msg,
-            "msg_type": "error"
-        })
+        return templates.TemplateResponse("register.html", _template_ctx(
+            request,
+            message="Email already exists",
+            msg_type="error",
+            active_nav=None,
+        ))
 
     # Create user
     models.create_user(email, password, name)
 
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "message": "Registration successful! Please login.",
-        "msg_type": "success"
-    })
+    return templates.TemplateResponse("login.html", _template_ctx(
+        request,
+        message="Registration successful! Please login.",
+        msg_type="success",
+        active_nav=None,
+    ))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -137,11 +167,12 @@ def home():
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {
-        "request":  request,
-        "message":  request.session.pop("message",  None),
-        "msg_type": request.session.pop("msg_type", None),
-    })
+    return templates.TemplateResponse("login.html", _template_ctx(
+        request,
+        message=request.session.pop("message", None),
+        msg_type=request.session.pop("msg_type", None),
+        active_nav=None,
+    ))
 
 
 @app.post("/login")
@@ -180,8 +211,19 @@ def dashboard(request: Request):
         return RedirectResponse("/login", status_code=303)
 
     resume     = models.get_latest_resume(user["id"])
-    has_resume = bool(resume and (resume.get("role") or resume.get("summary")))
+    # Only treat as "complete" when user confirmed parsed data (job matching ran)
+    confirmed  = resume and int(resume.get("profile_confirmed", 1) or 0) == 1
+    has_resume = bool(confirmed and resume and (resume.get("role") or resume.get("summary")))
     resume_data = None
+
+    pending_resume_json = None
+    pend = models.get_pending_resume(user["id"])
+    if pend:
+        pfile = f"parsed_resumes_{user['id']}_{pend['id']}.json"
+        if os.path.exists(pfile):
+            with open(pfile) as f:
+                pending_resume_json = json.load(f)
+            pending_resume_json["resume_id"] = pend["id"]
 
     if has_resume:
         skills = []
@@ -207,14 +249,16 @@ def dashboard(request: Request):
             "uploaded_at": (resume.get("created_at") or "")[:10],
         }
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request":    request,
-        "user":       request.session["user"],
-        "has_resume": has_resume,
-        "resume":     resume_data,
-        "message":    request.session.pop("message",  None),
-        "msg_type":   request.session.pop("msg_type", None),
-    })
+    return templates.TemplateResponse("dashboard.html", _template_ctx(
+        request,
+        user=request.session["user"],
+        has_resume=has_resume,
+        resume=resume_data,
+        pending_resume_json=pending_resume_json,
+        message=request.session.pop("message", None),
+        msg_type=request.session.pop("msg_type", None),
+        active_nav="dashboard",
+    ))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -267,94 +311,33 @@ async def upload_resume(
     print(f"✅ Degree   : {highest_degree}")
     print(f"✅ Exp years: {experience_years}")
 
-    # ── Step 4: Save Resume ──
+    # ── Step 4: Save resume row (pending confirmation — no profile update / no matching yet) ──
     models.deactivate_all_resumes(user["id"])
 
     resume_id = models.insert_resume(user["id"], {
         "file_path": file_path,
         "label": label or file.filename,
-        "role": summary[:100],
+        "role": summary[:100] if summary else "",
         "summary": summary,
         "experience": json.dumps(skills),
         "highest_degree": highest_degree,
         "institution": institution,
         "graduation_year": graduation_year,
         "experience_years": experience_years,
+        "profile_confirmed": 0,
     })
 
-    # models.link_skills_to_resume(resume_id, skills)
-
-    # ── Step 5: Update Profile ──
-    profile = models.get_or_create_profile(user["id"])
-
-    updates = {
-        "skills": json.dumps(skills),
-        "experience_years": experience_years,
-        "active_resume_id": resume_id,
-    }
-
-    if not profile.get("highest_degree") and highest_degree:
-        updates["highest_degree"] = highest_degree
-
-    if not profile.get("institution") and institution:
-        updates["institution"] = institution
-
-    if not profile.get("graduation_year") and graduation_year:
-        updates["graduation_year"] = graduation_year
-
-    if not profile.get("phone") and phone:
-        updates["phone"] = phone
-
-    if not profile.get("location") and location:
-        updates["location"] = location
-
-    models.update_profile(user["id"], updates)
-
-    # Update username if needed
-    if name and name != user.get("username"):
-        models.update_username(user["id"], name)
-
-    # ── Step 6: Save parsed cache ──
     parsed_file = f"parsed_resumes_{user['id']}_{resume_id}.json"
     with open(parsed_file, "w") as f:
         json.dump(parsed_data, f)
 
-    # # ── Step 7: Build profile for matching ──
-    profile = models.get_or_create_profile(user["id"])
+    print(f"💾 Resume #{resume_id} saved — awaiting profile confirmation")
 
-    full_profile = {
-        "skills": json.loads(profile.get("skills") or "[]"),
-        "experience_years": profile.get("experience_years", 0),
-        "expected_roles": json.loads(profile.get("expected_roles") or "[]"),
-        "preferred_location": profile.get("preferred_location", ""),
-        "job_type": profile.get("job_type", ""),
-    }
-
-    # ── Step 8: Job Matching ──
-    from company_matcher import get_best_matching_companies_from_profile
-
-    raw_jobs = get_best_matching_companies_from_profile(full_profile, limit=100)
-    best_matches = models.match_jobs_to_resume(text, raw_jobs, threshold=0.2)
-
-    if not best_matches:
-        best_matches = raw_jobs[:50]
-
-    links = generate_redirect_links(" ".join(skills[:2]) if skills else "developer")
-
-    # ── Step 9: Save Suggestions ──
-    models.delete_unapplied_suggestions(user["id"])
-    models.insert_job_suggestions(user["id"], best_matches)
-
-    print(f"💾 Resume #{resume_id} saved with {len(best_matches)} jobs")
-
-    # ── Step 10: Response ──
     return {
         "success": True,
+        "pending_confirmation": True,
         "resume_id": resume_id,
-        "skills": skills,
-        "jobs": best_matches,
-        "links": links,
-        "profile": {
+        "parsed": {
             "name": name,
             "phone": phone,
             "location": location,
@@ -362,7 +345,116 @@ async def upload_resume(
             "highest_degree": highest_degree,
             "institution": institution,
             "graduation_year": graduation_year,
-        }
+            "summary": summary,
+            "skills": skills,
+        },
+    }
+
+
+@app.post("/confirm_resume_profile")
+async def confirm_resume_profile(request: Request):
+    """Apply confirmed profile fields, then run job matching (after upload)."""
+    user = _require_login(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    resume_id = body.get("resume_id")
+    if not resume_id:
+        return JSONResponse({"error": "resume_id required"}, status_code=400)
+
+    resume = models.get_resume_by_id(int(resume_id), user["id"])
+    if not resume:
+        return JSONResponse({"error": "Resume not found"}, status_code=404)
+
+    if int(resume.get("profile_confirmed", 0) or 0) != 0:
+        return JSONResponse({"error": "Profile already confirmed for this resume"}, status_code=400)
+
+    name = (body.get("name") or "").strip() or user.get("username", "")
+    phone = (body.get("phone") or "").strip()
+    location = (body.get("location") or "").strip()
+    try:
+        experience_years = float(body.get("experience_years", 0) or 0)
+    except (TypeError, ValueError):
+        experience_years = 0.0
+    highest_degree = (body.get("highest_degree") or "").strip()
+    institution = (body.get("institution") or "").strip()
+    graduation_year = (body.get("graduation_year") or "").strip()
+    summary = (body.get("summary") or "").strip() or (resume.get("summary") or "")
+    raw_skills = body.get("skills")
+    if isinstance(raw_skills, list):
+        skills = [str(s).strip() for s in raw_skills if str(s).strip()]
+    elif isinstance(raw_skills, str):
+        skills = [s.strip() for s in raw_skills.replace("\n", ",").split(",") if s.strip()]
+    else:
+        skills = []
+    skills = sorted(set(skills))
+
+    file_path = resume.get("file_path") or ""
+    text = ""
+    if file_path and os.path.exists(file_path):
+        text = extract_text(file_path)
+
+    models.update_resume_record(int(resume_id), user["id"], {
+        "role": summary[:100] if summary else resume.get("role", ""),
+        "summary": summary,
+        "experience": json.dumps(skills),
+        "highest_degree": highest_degree,
+        "institution": institution,
+        "graduation_year": graduation_year,
+        "experience_years": experience_years,
+        "profile_confirmed": 1,
+    })
+
+    updates = {
+        "skills": json.dumps(skills),
+        "experience_years": experience_years,
+        "active_resume_id": int(resume_id),
+        "highest_degree": highest_degree,
+        "institution": institution,
+        "graduation_year": graduation_year,
+        "phone": phone,
+        "location": location,
+    }
+    models.update_profile(user["id"], updates)
+
+    if name and name != user.get("username"):
+        models.update_username(user["id"], name)
+
+    profile = models.get_or_create_profile(user["id"])
+    full_profile = {
+        "skills": skills,
+        "experience_years": experience_years,
+        "expected_roles": json.loads(profile.get("expected_roles") or "[]"),
+        "preferred_location": profile.get("preferred_location") or "",
+        "job_type": profile.get("job_type") or "",
+    }
+
+    from company_matcher import get_best_matching_companies_from_profile
+
+    raw_jobs = get_best_matching_companies_from_profile(full_profile, limit=100)
+    best_matches = models.match_jobs_to_resume(text, raw_jobs, threshold=0.2) if text else []
+
+    if not best_matches:
+        best_matches = raw_jobs[:50]
+
+    links = generate_redirect_links(" ".join(skills[:2]) if skills else "developer")
+
+    models.delete_unapplied_suggestions(user["id"])
+    models.insert_job_suggestions(user["id"], best_matches)
+
+    print(f"✅ Profile confirmed for resume #{resume_id} — {len(best_matches)} job matches")
+
+    return {
+        "success": True,
+        "resume_id": int(resume_id),
+        "skills": skills,
+        "jobs": best_matches,
+        "links": links,
     }
 
 
@@ -455,10 +547,11 @@ def mark_applied(job_id: int, request: Request):
 def suggestions_page(request: Request):
     if "user" not in request.session:
         return RedirectResponse("/login", status_code=303)
-    return templates.TemplateResponse("suggestions.html", {
-        "request": request,
-        "user":    request.session["user"],
-    })
+    return templates.TemplateResponse("suggestions.html", _template_ctx(
+        request,
+        user=request.session["user"],
+        active_nav="suggestions",
+    ))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -486,11 +579,12 @@ def applied_page(request: Request):
                 "match_score": round(score * 100) if score <= 1 else int(score),
             })
 
-    return templates.TemplateResponse("applied.html", {
-        "request": request,
-        "user":    request.session["user"],
-        "applied": applied,
-    })
+    return templates.TemplateResponse("applied.html", _template_ctx(
+        request,
+        user=request.session["user"],
+        applied=applied,
+        active_nav="applied",
+    ))
 
 
 @app.get("/get_applied")
@@ -536,6 +630,18 @@ def profile_page(request: Request):
     except Exception:
         pass
 
+    pending_resume_json = None
+    pend = models.get_pending_resume(user["id"])
+    if pend:
+        pfile = f"parsed_resumes_{user['id']}_{pend['id']}.json"
+        if os.path.exists(pfile):
+            with open(pfile) as f:
+                pending_resume_json = json.load(f)
+            pending_resume_json["resume_id"] = pend["id"]
+
+    if pending_resume_json and isinstance(pending_resume_json.get("skills"), list) and len(pending_resume_json["skills"]) > 0:
+        skills = pending_resume_json["skills"]
+
     expected_roles = []
     try:
         expected_roles = json.loads(profile.get("expected_roles") or "[]")
@@ -561,16 +667,18 @@ def profile_page(request: Request):
             "uploaded_at": (r.get("created_at") or "")[:10],
         })
 
-    return templates.TemplateResponse("profile.html", {
-        "request":        request,
-        "user":           user,
-        "profile":        profile,
-        "skills":         skills,
-        "expected_roles": expected_roles,
-        "resumes":        resume_list,
-        "message":        request.session.pop("message",  None),
-        "msg_type":       request.session.pop("msg_type", None),
-    })
+    return templates.TemplateResponse("profile.html", _template_ctx(
+        request,
+        user=user,
+        profile=profile,
+        skills=skills,
+        expected_roles=expected_roles,
+        resumes=resume_list,
+        pending_resume_json=pending_resume_json,
+        message=request.session.pop("message", None),
+        msg_type=request.session.pop("msg_type", None),
+        active_nav="profile",
+    ))
 
 
 # ───────────────────────────────────────────────────────────────────
@@ -817,7 +925,146 @@ async def rematch_resume(resume_id: int, request: Request):
     return JSONResponse({"success": True, "jobs_count": len(best_matches)})
 
 
+# ═══════════════════════════════════════════════════════════════════
+# ADMIN (superuser)
+# ═══════════════════════════════════════════════════════════════════
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(request: Request):
+    admin, redir = _ensure_admin(request)
+    if redir:
+        return redir
+
+    stats = models.admin_stats()
+    return templates.TemplateResponse(
+        "admin/dashboard.html",
+        _template_ctx(
+            request,
+            user=request.session.get("user"),
+            active_nav="admin",
+            admin_stats=stats,
+            message=request.session.pop("message", None),
+            msg_type=request.session.pop("msg_type", None),
+        ),
+    )
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+def admin_users_page(request: Request):
+    admin, redir = _ensure_admin(request)
+    if redir:
+        return redir
+
+    users = models.list_users_admin()
+    return templates.TemplateResponse(
+        "admin/users.html",
+        _template_ctx(
+            request,
+            user=request.session.get("user"),
+            active_nav="admin_users",
+            users=users,
+            admin_id=admin["id"],
+            message=request.session.pop("message", None),
+            msg_type=request.session.pop("msg_type", None),
+        ),
+    )
+
+
+@app.post("/admin/users/{target_id}/delete")
+def admin_delete_user_route(target_id: int, request: Request):
+    admin, redir = _ensure_admin(request)
+    if redir:
+        return redir
+
+    if target_id == admin["id"]:
+        request.session["message"] = "You cannot delete your own account from the admin panel."
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/admin/users", status_code=303)
+
+    if not models.get_user_by_id(target_id):
+        request.session["message"] = "User not found."
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/admin/users", status_code=303)
+
+    models.admin_delete_user_cascade(target_id)
+    request.session["message"] = f"User #{target_id} and related data were removed."
+    request.session["msg_type"] = "success"
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@app.post("/admin/users/{target_id}/toggle-admin")
+def admin_toggle_admin_route(target_id: int, request: Request):
+    admin, redir = _ensure_admin(request)
+    if redir:
+        return redir
+
+    target = models.get_user_by_id(target_id)
+    if not target:
+        request.session["message"] = "User not found."
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/admin/users", status_code=303)
+
+    if target_id == admin["id"]:
+        request.session["message"] = "You cannot change your own admin flag."
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/admin/users", status_code=303)
+
+    new_val = 0 if int(target.get("is_admin") or 0) else 1
+    models.set_user_admin(target_id, new_val)
+    request.session["message"] = (
+        f"User #{target_id} admin access {'enabled' if new_val else 'disabled'}."
+    )
+    request.session["msg_type"] = "success"
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@app.get("/admin/jobs", response_class=HTMLResponse)
+def admin_jobs_page(request: Request, page: int = 1, user_id: int | None = None):
+    _, redir = _ensure_admin(request)
+    if redir:
+        return redir
+
+    page = max(1, page)
+    per_page = 40
+    offset = (page - 1) * per_page
+    total = models.admin_count_job_suggestions(user_id)
+    jobs = models.admin_list_job_suggestions(
+        limit=per_page, offset=offset, user_id=user_id
+    )
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    return templates.TemplateResponse(
+        "admin/jobs.html",
+        _template_ctx(
+            request,
+            user=request.session.get("user"),
+            active_nav="admin_jobs",
+            jobs=jobs,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            filter_user_id=user_id,
+            all_users=models.list_users_admin(),
+            message=request.session.pop("message", None),
+            msg_type=request.session.pop("msg_type", None),
+        ),
+    )
+
+
+@app.post("/admin/jobs/{job_id}/delete")
+def admin_delete_job_route(job_id: int, request: Request):
+    _admin, redir = _ensure_admin(request)
+    if redir:
+        return redir
+
+    if not models.admin_delete_job_suggestion(job_id):
+        request.session["message"] = "Job suggestion not found."
+        request.session["msg_type"] = "error"
+    else:
+        request.session["message"] = f"Suggestion #{job_id} removed."
+        request.session["msg_type"] = "success"
+
+    return RedirectResponse("/admin/jobs", status_code=303)
 
 
 # ═══════════════════════════════════════════════════════════════════

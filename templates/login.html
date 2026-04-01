@@ -1,36 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CareerMatch AI · Login</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-
-<body>
-
-<header class="cm-header">
-    <div class="cm-header-inner">
-        <div class="cm-logo">
-            <span class="cm-logo-mark">CM</span>
-            <span class="cm-logo-text">CareerMatch AI</span>
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Login{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main cm-main-auth">
+    <section class="cm-auth-split" aria-labelledby="login-heading">
+        <div class="cm-auth-brand">
+            <p class="cm-auth-brand-title" id="login-heading">Your career, matched by AI</p>
+            <p class="cm-auth-brand-text">
+                Sign in to upload your resume, get ranked job suggestions across platforms,
+                and track applications in one place.
+            </p>
         </div>
-    </div>
-</header>
-
-<main class="cm-main cm-main-auth">
-    
-    
-    <section class="cm-auth-shell">
-        <div class="cm-panel cm-auth-panel">
-            
+        <div class="cm-auth-panel">
             <h1 class="cm-auth-title">Welcome back</h1>
             <p class="cm-auth-subtitle">
-                Sign in to manage your automatic job applications, review applied roles,
-                and explore new matches tailored to your resume.
+                Sign in to manage your job matches, review applied roles, and explore new suggestions.
             </p>
 
-            <!-- ✅ MESSAGE BLOCK ADDED HERE -->
             {% if message %}
                 <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% else %}cm-alert-error{% endif %}">
                     <span class="cm-alert-text">{{ message }}</span>
@@ -38,15 +23,14 @@
             {% endif %}
 
             <form action="/login" method="post" class="cm-form">
-
                 <div class="cm-field">
-                    <label class="cm-label">Email</label>
-                    <input type="email" name="email" required class="cm-input">
+                    <label class="cm-label" for="login-email">Email</label>
+                    <input type="email" id="login-email" name="email" required class="cm-input" autocomplete="email">
                 </div>
 
                 <div class="cm-field">
-                    <label class="cm-label">Password</label>
-                    <input type="password" name="password" required class="cm-input">
+                    <label class="cm-label" for="login-password">Password</label>
+                    <input type="password" id="login-password" name="password" required class="cm-input" autocomplete="current-password">
                 </div>
 
                 <button type="submit" class="cm-button cm-button-primary">
@@ -56,14 +40,11 @@
                 <div class="cm-auth-footer">
                     <p class="cm-hint">Don't have an account?</p>
                     <a href="/register" class="cm-button cm-button-secondary">
-                        Create Account
+                        Create account
                     </a>
                 </div>
-
             </form>
         </div>
     </section>
 </main>
-
-</body>
-</html>
+{% endblock %}

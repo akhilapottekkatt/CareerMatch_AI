@@ -1,539 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CareerMatch AI · Profile</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Profile{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/profile.css" />
+{% endblock %}
+{% block content %}
+<main id="main-content" class="profile-page">
+{% set p = pending_resume_json %}
 
-        :root {
-            --blue:        #2563EB;
-            --blue-light:  #3B82F6;
-            --blue-dark:   #1D4ED8;
-            --violet:      #7C3AED;
-            --violet-light:#A78BFA;
-            --violet-dark: #5B21B6;
-            --peach:       #FBBF89;
-            --peach-light: #FDE8D8;
-            --peach-dark:  #F97316;
-            --black:       #0F0F13;
-            --dark:        #1A1A2E;
-            --dark-card:   #16213E;
-            --white:       #FFFFFF;
-            --grey:        #94A3B8;
-            --grey-light:  #F1F5F9;
-            --border:      rgba(124,58,237,0.2);
-            --glow-blue:   rgba(37,99,235,0.3);
-            --glow-violet: rgba(124,58,237,0.3);
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background: var(--black);
-            color: var(--white);
-            min-height: 100vh;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background:
-                radial-gradient(ellipse 80% 50% at 20% 20%, rgba(37,99,235,0.12) 0%, transparent 60%),
-                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(124,58,237,0.12) 0%, transparent 60%),
-                radial-gradient(ellipse 40% 30% at 60% 10%, rgba(251,191,137,0.06) 0%, transparent 50%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        /* ── Header ── */
-        .cm-header {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: rgba(15,15,19,0.85);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border);
-        }
-        .cm-header-inner {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-            height: 64px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .cm-logo { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; }
-        .cm-logo-mark {
-            width: 34px; height: 34px;
-            background: linear-gradient(135deg, var(--blue), var(--violet));
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Syne', sans-serif;
-            font-size: 0.75rem; font-weight: 800;
-            color: var(--white);
-        }
-        .cm-logo-text {
-            font-family: 'Syne', sans-serif;
-            font-size: 1rem; font-weight: 700;
-            color: var(--white);
-        }
-        .cm-nav { display: flex; align-items: center; gap: 0.25rem; }
-        .cm-nav-link {
-            padding: 0.4rem 0.9rem;
-            border-radius: 8px;
-            font-size: 0.875rem; font-weight: 500;
-            color: var(--grey);
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        .cm-nav-link:hover { color: var(--white); background: rgba(255,255,255,0.06); }
-        .cm-nav-link-active { color: var(--white) !important; background: rgba(255,255,255,0.08) !important; }
-
-        /* ── Page Layout ── */
-        .profile-page {
-            position: relative;
-            z-index: 1;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 2.5rem 1.5rem 4rem;
-        }
-
-        /* ── Profile Header ── */
-        .profile-header {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-            margin-bottom: 2.5rem;
-            padding: 2rem;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-        .profile-header::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, var(--blue), var(--violet), var(--peach));
-        }
-
-        /* ── Avatar ── */
-        .avatar-wrap { position: relative; flex-shrink: 0; }
-        .avatar-img {
-            width: 90px; height: 90px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid transparent;
-            background: linear-gradient(var(--dark-card), var(--dark-card)) padding-box,
-                        linear-gradient(135deg, var(--blue), var(--violet)) border-box;
-        }
-        .avatar-placeholder {
-            width: 90px; height: 90px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--blue-dark), var(--violet-dark));
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Syne', sans-serif;
-            font-size: 1.8rem; font-weight: 800;
-            color: var(--white);
-            border: 3px solid rgba(124,58,237,0.4);
-        }
-        .avatar-edit-btn {
-            position: absolute;
-            bottom: 2px; right: 2px;
-            width: 26px; height: 26px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--blue), var(--violet));
-            border: 2px solid var(--black);
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.65rem;
-            transition: transform 0.2s;
-        }
-        .avatar-edit-btn:hover { transform: scale(1.1); }
-
-        .profile-meta { flex: 1; }
-        .profile-name {
-            font-family: 'Syne', sans-serif;
-            font-size: 1.6rem; font-weight: 800;
-            color: var(--white);
-            margin-bottom: 0.25rem;
-        }
-        .profile-email { font-size: 0.875rem; color: var(--grey); margin-bottom: 0.6rem; }
-        .profile-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem; font-weight: 600;
-            letter-spacing: 0.02em;
-        }
-        .badge-blue   { background: rgba(37,99,235,0.15);  color: var(--blue-light);   border: 1px solid rgba(37,99,235,0.3); }
-        .badge-violet { background: rgba(124,58,237,0.15); color: var(--violet-light); border: 1px solid rgba(124,58,237,0.3); }
-        .badge-peach  { background: rgba(251,191,137,0.15);color: var(--peach);        border: 1px solid rgba(251,191,137,0.3); }
-
-        /* ── Grid ── */
-        .profile-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.25rem;
-        }
-        .profile-grid .span-2 { grid-column: span 2; }
-
-        /* ── Cards ── */
-        .p-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            transition: border-color 0.2s;
-        }
-        .p-card:hover { border-color: rgba(124,58,237,0.4); }
-        .p-card-title {
-            font-family: 'Syne', sans-serif;
-            font-size: 0.8rem; font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--violet-light);
-            margin-bottom: 1.25rem;
-            display: flex; align-items: center; gap: 0.5rem;
-        }
-        .p-card-title-icon {
-            width: 24px; height: 24px;
-            border-radius: 6px;
-            background: rgba(124,58,237,0.2);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.75rem;
-        }
-
-        /* ── Form Fields ── */
-        .field-group { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .field { display: flex; flex-direction: column; gap: 0.4rem; }
-        .field label {
-            font-size: 0.75rem; font-weight: 600;
-            color: var(--grey);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .field input, .field select {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 0.65rem 0.9rem;
-            color: var(--white);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 0.9rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            outline: none;
-            width: 100%;
-        }
-        .field input:focus, .field select:focus {
-            border-color: var(--violet);
-            box-shadow: 0 0 0 3px var(--glow-violet);
-        }
-        .field input[readonly] { color: var(--grey); cursor: not-allowed; }
-        .field select option { background: var(--dark); color: var(--white); }
-
-        /* ── Save Button ── */
-        .btn-save {
-            margin-top: 1.25rem;
-            padding: 0.7rem 1.75rem;
-            border-radius: 10px;
-            background: linear-gradient(135deg, var(--blue), var(--violet));
-            color: var(--white);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 0.9rem; font-weight: 600;
-            border: none; cursor: pointer;
-            transition: opacity 0.2s, transform 0.2s;
-        }
-        .btn-save:hover { opacity: 0.9; transform: translateY(-1px); }
-
-        /* ── Skills ── */
-        .skills-wrap {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            min-height: 40px;
-        }
-        .skill-tag {
-            display: inline-flex; align-items: center; gap: 0.4rem;
-            padding: 0.3rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem; font-weight: 500;
-            background: rgba(37,99,235,0.15);
-            color: var(--blue-light);
-            border: 1px solid rgba(37,99,235,0.3);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .skill-tag:hover { background: rgba(220,38,38,0.15); color: #F87171; border-color: rgba(220,38,38,0.3); }
-        .skill-tag .remove { font-size: 0.7rem; opacity: 0.7; }
-
-        .skill-add-row { display: flex; gap: 0.5rem; }
-        .skill-add-row input {
-            flex: 1;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 0.55rem 0.9rem;
-            color: var(--white);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 0.875rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .skill-add-row input:focus { border-color: var(--blue); }
-        .btn-add-skill {
-            padding: 0.55rem 1rem;
-            border-radius: 10px;
-            background: rgba(37,99,235,0.2);
-            color: var(--blue-light);
-            border: 1px solid rgba(37,99,235,0.3);
-            font-size: 0.875rem; font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-add-skill:hover { background: rgba(37,99,235,0.35); }
-
-        /* ── Roles ── */
-        .roles-wrap { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
-        .role-tag {
-            display: inline-flex; align-items: center; gap: 0.4rem;
-            padding: 0.3rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.8rem; font-weight: 500;
-            background: rgba(124,58,237,0.15);
-            color: var(--violet-light);
-            border: 1px solid rgba(124,58,237,0.3);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .role-tag:hover { background: rgba(220,38,38,0.15); color: #F87171; border-color: rgba(220,38,38,0.3); }
-
-        /* ── Resume Cards ── */
-        .resume-tip {
-            padding: 0.75rem 1rem;
-            background: rgba(251,191,137,0.07);
-            border: 1px solid rgba(251,191,137,0.2);
-            border-radius: 10px;
-            font-size: 0.8rem;
-            color: var(--peach);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.5rem;
-            line-height: 1.5;
-        }
-
-        .resume-list { display: flex; flex-direction: column; gap: 0.75rem; }
-        .resume-item {
-            display: flex; align-items: center; gap: 1rem;
-            padding: 1rem 1.25rem;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.08);
-            transition: all 0.2s;
-        }
-        .resume-item:hover { border-color: var(--border); }
-        .resume-item.active {
-            border-color: rgba(124,58,237,0.5);
-            background: rgba(124,58,237,0.07);
-        }
-        .resume-icon {
-            width: 40px; height: 40px;
-            border-radius: 10px;
-            background: rgba(124,58,237,0.15);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.1rem;
-            flex-shrink: 0;
-        }
-        .resume-info { flex: 1; min-width: 0; }
-        .resume-name {
-            font-size: 0.9rem; font-weight: 600;
-            color: var(--white);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .resume-meta {
-            font-size: 0.75rem;
-            color: var(--grey);
-            margin-top: 0.25rem;
-            line-height: 1.6;
-        }
-        .resume-actions { display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; }
-        .badge-active {
-            padding: 0.2rem 0.6rem;
-            border-radius: 20px;
-            font-size: 0.7rem; font-weight: 700;
-            background: rgba(124,58,237,0.25);
-            color: var(--violet-light);
-            border: 1px solid rgba(124,58,237,0.4);
-        }
-        .btn-icon {
-            width: 32px; height: 32px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.1);
-            background: transparent;
-            color: var(--grey);
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-        .btn-icon:hover { background: rgba(255,255,255,0.08); color: var(--white); }
-        .btn-icon.danger:hover { background: rgba(220,38,38,0.15); color: #F87171; border-color: rgba(220,38,38,0.3); }
-        .btn-set-active {
-            padding: 0.3rem 0.75rem;
-            border-radius: 8px;
-            font-size: 0.75rem; font-weight: 600;
-            background: rgba(37,99,235,0.15);
-            color: var(--blue-light);
-            border: 1px solid rgba(37,99,235,0.3);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-set-active:hover { background: rgba(37,99,235,0.3); }
-
-        /* ── Upload Resume Button ── */
-        .btn-upload-resume {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 12px;
-            border: 1px dashed rgba(124,58,237,0.4);
-            background: transparent;
-            color: var(--violet-light);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 0.875rem; font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 0.75rem;
-            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-        }
-        .btn-upload-resume:hover {
-            background: rgba(124,58,237,0.08);
-            border-color: rgba(124,58,237,0.7);
-        }
-
-        /* ── Toast ── */
-        .toast {
-            position: fixed;
-            bottom: 2rem; right: 2rem;
-            padding: 0.85rem 1.5rem;
-            border-radius: 12px;
-            font-size: 0.875rem; font-weight: 500;
-            z-index: 999;
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s;
-            pointer-events: none;
-            max-width: 360px;
-        }
-        .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.success { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: #6EE7B7; }
-        .toast.error   { background: rgba(220,38,38,0.15);  border: 1px solid rgba(220,38,38,0.4);  color: #FCA5A5; }
-        .toast.info    { background: rgba(37,99,235,0.15);  border: 1px solid rgba(37,99,235,0.4);  color: #93C5FD; }
-
-        /* ── Modal ── */
-        .modal-overlay {
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(8px);
-            z-index: 200;
-            display: flex; align-items: center; justify-content: center;
-            opacity: 0; pointer-events: none;
-            transition: opacity 0.2s;
-        }
-        .modal-overlay.show { opacity: 1; pointer-events: all; }
-        .modal {
-            background: var(--dark-card);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 2rem;
-            width: 100%;
-            max-width: 420px;
-            transform: translateY(20px);
-            transition: transform 0.2s;
-        }
-        .modal-overlay.show .modal { transform: translateY(0); }
-        .modal-title {
-            font-family: 'Syne', sans-serif;
-            font-size: 1.1rem; font-weight: 700;
-            color: var(--white);
-            margin-bottom: 1.25rem;
-        }
-        .modal-close {
-            float: right;
-            background: none; border: none;
-            color: var(--grey); font-size: 1.2rem;
-            cursor: pointer; margin-top: -4px;
-        }
-        .modal-field {
-            margin-bottom: 1rem;
-        }
-        .modal-field label {
-            display: block;
-            font-size: 0.75rem; font-weight: 600;
-            color: var(--grey);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.4rem;
-        }
-        .modal-field input {
-            width: 100%;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 0.65rem 0.9rem;
-            color: var(--white);
-            font-family: 'DM Sans', sans-serif;
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .modal-field input:focus { border-color: var(--violet); }
-
-        /* ── Responsive ── */
-        @media (max-width: 700px) {
-            .profile-grid { grid-template-columns: 1fr; }
-            .profile-grid .span-2 { grid-column: span 1; }
-            .field-group { grid-template-columns: 1fr; }
-            .profile-header { flex-direction: column; text-align: center; }
-            .profile-badges { justify-content: center; }
-            .resume-item { flex-direction: column; align-items: flex-start; }
-            .resume-actions { width: 100%; }
-        }
-    </style>
-</head>
-
-<body>
-
-<!-- ── Header ── -->
-<header class="cm-header">
-    <div class="cm-header-inner">
-        <div class="cm-logo">
-            <span class="cm-logo-mark">CM</span>
-            <span class="cm-logo-text">CareerMatch AI</span>
+    {% if p %}
+    <div class="profile-pending-banner" id="profilePendingBanner">
+        <div class="profile-pending-inner">
+            <p class="profile-pending-text">
+                <strong>Resume parsed.</strong> Review and edit your details below, then confirm to run job matching.
+            </p>
+            <label class="profile-pending-label" for="pendingSummary">Professional summary</label>
+            <textarea id="pendingSummary" class="profile-pending-textarea" rows="3" placeholder="Summary from your resume">{{ p.summary or '' }}</textarea>
+            <input type="hidden" id="pendingResumeId" value="{{ p.resume_id }}">
+            <button type="button" class="btn-save profile-pending-btn" onclick="confirmPendingResume()">Confirm &amp; find matching jobs</button>
         </div>
-        <nav class="cm-nav">
-            <a href="/dashboard"   class="cm-nav-link">Dashboard</a>
-            <a href="/suggestions" class="cm-nav-link">Suggestions</a>
-            <a href="/applied"     class="cm-nav-link">Applied Jobs</a>
-            <a href="/profile"     class="cm-nav-link cm-nav-link-active">Profile</a>
-            <a href="/logout"      class="cm-nav-link">Logout</a>
-        </nav>
     </div>
-</header>
+    {% endif %}
 
-<!-- ── Profile Page ── -->
-<main class="profile-page">
-
-    <!-- ── Profile Header ── -->
     <div class="profile-header">
         <div class="avatar-wrap">
             {% if profile and profile.profile_pic %}
@@ -543,8 +30,8 @@
                     {{ user.username[0].upper() }}
                 </div>
             {% endif %}
-            <button class="avatar-edit-btn" onclick="document.getElementById('picInput').click()" title="Change photo">✏️</button>
-            <input type="file" id="picInput" accept="image/*" style="display:none" onchange="uploadPic(this)">
+            <button type="button" class="avatar-edit-btn" onclick="document.getElementById('picInput').click()" title="Change photo">✏️</button>
+            <input type="file" id="picInput" accept="image/*" hidden onchange="uploadPic(this)">
         </div>
 
         <div class="profile-meta">
@@ -561,16 +48,14 @@
                     <span class="badge badge-peach">{{ profile.job_type }}</span>
                 {% endif %}
                 {% if skills %}
-                    <span class="badge badge-blue">⚡ {{ skills | length }} skills</span>
+                    <span class="badge badge-blue">{{ skills | length }} skills</span>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- ── Grid ── -->
     <div class="profile-grid">
 
-        <!-- ── Basic Info ── -->
         <div class="p-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">👤</div>
@@ -580,7 +65,7 @@
                 <div class="field-group">
                     <div class="field">
                         <label>Full Name</label>
-                        <input type="text" name="name" value="{{ user.username }}" required>
+                        <input type="text" name="name" value="{% if p and p.name %}{{ p.name }}{% else %}{{ user.username }}{% endif %}" required>
                     </div>
                     <div class="field">
                         <label>Email</label>
@@ -589,20 +74,19 @@
                     <div class="field">
                         <label>Phone</label>
                         <input type="text" name="phone" placeholder="+91 98765 43210"
-                               value="{{ profile.phone if profile and profile.phone else '' }}">
+                               value="{% if p and p.phone %}{{ p.phone }}{% elif profile and profile.phone %}{{ profile.phone }}{% endif %}">
                     </div>
                     <div class="field">
                         <label>Location</label>
-                        <input type="text" name="location" placeholder="Thrissur, Kerala"
-                               value="{{ profile.location if profile and profile.location else '' }}">
+                        <input type="text" name="location" placeholder="City, Region"
+                               value="{% if p and p.location %}{{ p.location }}{% elif profile and profile.location %}{{ profile.location }}{% endif %}">
                     </div>
                     <div class="field">
                         <label>Experience (Years)</label>
                         <input type="number" name="experience_years" min="0" max="50" step="0.5"
-                               value="{{ profile.experience_years if profile and profile.experience_years else '0' }}">
+                               value="{% if p %}{{ p.experience_years | default(0) }}{% elif profile and profile.experience_years %}{{ profile.experience_years }}{% else %}0{% endif %}">
                     </div>
                 </div>
-                <!-- Hidden fields passed along on save -->
                 <input type="hidden" name="preferred_location" id="h_pref_loc"
                        value="{{ profile.preferred_location if profile and profile.preferred_location else '' }}">
                 <input type="hidden" name="salary_range" id="h_salary"
@@ -610,16 +94,15 @@
                 <input type="hidden" name="job_type" id="h_job_type"
                        value="{{ profile.job_type if profile and profile.job_type else '' }}">
                 <input type="hidden" name="highest_degree" id="h_degree"
-                       value="{{ profile.highest_degree if profile and profile.highest_degree else '' }}">
+                       value="{% if p and p.highest_degree %}{{ p.highest_degree }}{% elif profile and profile.highest_degree %}{{ profile.highest_degree }}{% endif %}">
                 <input type="hidden" name="institution" id="h_inst"
-                       value="{{ profile.institution if profile and profile.institution else '' }}">
+                       value="{% if p and p.institution %}{{ p.institution }}{% elif profile and profile.institution %}{{ profile.institution }}{% endif %}">
                 <input type="hidden" name="graduation_year" id="h_grad"
-                       value="{{ profile.graduation_year if profile and profile.graduation_year else '' }}">
+                       value="{% if p and p.graduation_year %}{{ p.graduation_year }}{% elif profile and profile.graduation_year %}{{ profile.graduation_year }}{% endif %}">
                 <button type="submit" class="btn-save">Save Changes</button>
             </form>
         </div>
 
-        <!-- ── Qualifications ── -->
         <div class="p-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">🎓</div>
@@ -629,28 +112,25 @@
                 <div class="field">
                     <label>Highest Degree</label>
                     <input type="text" id="f_degree" placeholder="B.Tech Computer Science"
-                           value="{{ profile.highest_degree if profile and profile.highest_degree else '' }}"
+                           value="{% if p and p.highest_degree %}{{ p.highest_degree }}{% elif profile and profile.highest_degree %}{{ profile.highest_degree }}{% endif %}"
                            oninput="document.getElementById('h_degree').value=this.value">
                 </div>
                 <div class="field">
                     <label>Institution</label>
-                    <input type="text" id="f_inst" placeholder="NIT Calicut"
-                           value="{{ profile.institution if profile and profile.institution else '' }}"
+                    <input type="text" id="f_inst" placeholder="Your university"
+                           value="{% if p and p.institution %}{{ p.institution }}{% elif profile and profile.institution %}{{ profile.institution }}{% endif %}"
                            oninput="document.getElementById('h_inst').value=this.value">
                 </div>
                 <div class="field">
                     <label>Graduation Year</label>
                     <input type="text" id="f_grad" placeholder="2022"
-                           value="{{ profile.graduation_year if profile and profile.graduation_year else '' }}"
+                           value="{% if p and p.graduation_year %}{{ p.graduation_year }}{% elif profile and profile.graduation_year %}{{ profile.graduation_year }}{% endif %}"
                            oninput="document.getElementById('h_grad').value=this.value">
                 </div>
             </div>
-            <p style="font-size:0.75rem;color:var(--grey);margin-top:0.75rem;">
-                ✨ Auto-filled from your resume. Edit and click Save Changes to update.
-            </p>
+            <p class="profile-hint">Auto-filled from your resume where possible. Save basic info to persist.</p>
         </div>
 
-        <!-- ── Job Preferences ── -->
         <div class="p-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">🎯</div>
@@ -686,12 +166,9 @@
                            oninput="document.getElementById('h_salary').value=this.value">
                 </div>
             </div>
-            <p style="font-size:0.75rem;color:var(--grey);margin-top:0.75rem;">
-                These preferences filter your job suggestions. Click Save Changes above to apply.
-            </p>
+            <p class="profile-hint">These preferences help filter suggestions. Use Save Changes in Basic Info to apply.</p>
         </div>
 
-        <!-- ── Expected Roles ── -->
         <div class="p-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">💼</div>
@@ -704,25 +181,22 @@
                     </span>
                 {% endfor %}
                 {% if not expected_roles %}
-                    <p style="color:var(--grey);font-size:0.8rem;">No roles added yet.</p>
+                    <p class="profile-hint" style="margin:0;">No roles added yet.</p>
                 {% endif %}
             </div>
             <div class="skill-add-row">
                 <input type="text" id="roleInput" placeholder="e.g. Python Developer, Data Analyst"
                        onkeydown="if(event.key==='Enter'){event.preventDefault();addRole();}">
-                <button class="btn-add-skill" onclick="addRole()">+ Add</button>
+                <button type="button" class="btn-add-skill" onclick="addRole()">+ Add</button>
             </div>
-            <button class="btn-save" onclick="saveRoles()" style="margin-top:1rem;">Save Roles</button>
+            <button type="button" class="btn-save" onclick="saveRoles()" style="margin-top:1rem;">Save Roles</button>
         </div>
 
-        <!-- ── Skills ── -->
         <div class="p-card span-2">
             <div class="p-card-title">
                 <div class="p-card-title-icon">⚡</div>
                 Skills
-                <span style="margin-left:auto;font-size:0.75rem;font-weight:400;color:var(--grey);" id="skillCount">
-                    {{ skills|length }} skills
-                </span>
+                <span class="p-card-count" id="skillCount">{{ skills|length }} skills</span>
             </div>
             <div class="skills-wrap" id="skillsWrap">
                 {% for skill in skills %}
@@ -731,38 +205,32 @@
                     </span>
                 {% endfor %}
                 {% if not skills %}
-                    <p style="color:var(--grey);font-size:0.8rem;">Upload a resume to auto-extract skills, or add them manually below.</p>
+                    <p class="profile-hint" style="margin:0;">Upload a resume to extract skills, or add them below.</p>
                 {% endif %}
             </div>
             <div class="skill-add-row">
                 <input type="text" id="skillInput" placeholder="e.g. React, Python, Docker (comma separated)"
                        onkeydown="if(event.key==='Enter'){event.preventDefault();addSkill();}">
-                <button class="btn-add-skill" onclick="addSkill()">+ Add Skill</button>
+                <button type="button" class="btn-add-skill" onclick="addSkill()">+ Add Skill</button>
             </div>
-            <button class="btn-save" onclick="saveSkills()" style="margin-top:1rem;">Save Skills</button>
+            <button type="button" class="btn-save" onclick="saveSkills()" style="margin-top:1rem;">Save Skills</button>
         </div>
 
-        <!-- ── Resumes ── -->
         <div class="p-card span-2">
             <div class="p-card-title">
                 <div class="p-card-title-icon">📄</div>
                 My Resumes
-                <span style="margin-left:auto;font-size:0.75rem;font-weight:400;color:var(--grey);">
-                    {{ resumes|length }} uploaded
-                </span>
+                <span class="p-card-count">{{ resumes|length }} uploaded</span>
             </div>
 
-            <!-- Tip banner -->
             <div class="resume-tip">
                 <span>💡</span>
                 <span>
-                    Each resume gives <strong>different job suggestions</strong> based on its field.
-                    Upload a <strong>Python Dev CV</strong> for backend jobs, a <strong>Data Science CV</strong>
-                    for ML jobs — click <strong>Set Active</strong> on any resume to instantly refresh your suggestions.
+                    Each resume can drive <strong>different suggestions</strong> by field.
+                    Use <strong>Set Active</strong> to switch which resume powers your matches.
                 </span>
             </div>
 
-            <!-- Resume list -->
             <div class="resume-list" id="resumeList">
                 {% for r in resumes %}
                 <div class="resume-item {% if r.is_active %}active{% endif %}" id="resume-{{ r.id }}">
@@ -772,7 +240,7 @@
                             {{ r.label or ('Resume ' ~ r.id) }}
                         </div>
                         <div class="resume-meta">
-                            <span style="color:var(--violet-light);font-weight:600;">
+                            <span class="resume-label-accent">
                                 {{ r.label or 'Resume' }}
                             </span>
                             · {{ r.role[:50] if r.role else 'No role detected' }}
@@ -781,8 +249,8 @@
                             {% if r.degree %}· 🎓 {{ r.degree[:40] }}{% endif %}
                             {% if r.skills %}
                             <br>
-                            <span style="color:var(--blue-light);">
-                                ⚡ {{ r.skills[:4]|join(', ') }}{% if r.skills|length > 4 %} +{{ r.skills|length - 4 }} more{% endif %}
+                            <span class="resume-skills-line">
+                                {{ r.skills[:4]|join(', ') }}{% if r.skills|length > 4 %} +{{ r.skills|length - 4 }} more{% endif %}
                             </span>
                             {% endif %}
                         </div>
@@ -791,60 +259,113 @@
                         {% if r.is_active %}
                             <span class="badge-active">✓ Active</span>
                         {% else %}
-                            <button class="btn-set-active" onclick="setActive({{ r.id }})">Set Active</button>
+                            <button type="button" class="btn-set-active" onclick="setActive({{ r.id }})">Set Active</button>
                         {% endif %}
-                        <button class="btn-icon" title="Rename" onclick="renameResume({{ r.id }})">✏️</button>
-                        <button class="btn-icon danger" title="Delete" onclick="deleteResume({{ r.id }})">🗑️</button>
+                        <button type="button" class="btn-icon" title="Rename" onclick="renameResume({{ r.id }})">✏️</button>
+                        <button type="button" class="btn-icon danger" title="Delete" onclick="deleteResume({{ r.id }})">🗑️</button>
                     </div>
                 </div>
                 {% endfor %}
 
                 {% if not resumes %}
-                <p style="color:var(--grey);font-size:0.875rem;text-align:center;padding:1.5rem;">
-                    No resumes uploaded yet. Upload one from the dashboard or use the button below.
+                <p class="profile-hint" style="text-align:center;padding:1.5rem;margin:0;">
+                    No resumes yet. Upload from the dashboard or below.
                 </p>
                 {% endif %}
             </div>
 
-            <button class="btn-upload-resume" onclick="document.getElementById('uploadModal').classList.add('show')">
-                ＋ Upload Another Resume
+            <button type="button" class="btn-upload-resume" onclick="document.getElementById('uploadModal').classList.add('show')">
+                + Upload another resume
             </button>
         </div>
 
-    </div><!-- end grid -->
+    </div>
 </main>
 
-<!-- ── Upload Resume Modal ── -->
 <div class="modal-overlay" id="uploadModal">
     <div class="modal">
-        <button class="modal-close" onclick="document.getElementById('uploadModal').classList.remove('show')">✕</button>
+        <button type="button" class="modal-close" onclick="document.getElementById('uploadModal').classList.remove('show')">✕</button>
         <div class="modal-title">Upload New Resume</div>
         <div class="modal-field">
-            <label>Label (e.g. "Data Science CV")</label>
+            <label for="resumeLabel">Label (e.g. Data Science CV)</label>
             <input type="text" id="resumeLabel" placeholder="Give this resume a name">
         </div>
         <div class="modal-field">
-            <label>Resume PDF</label>
+            <label for="resumeFileInput">Resume PDF</label>
             <input type="file" id="resumeFileInput" accept="application/pdf">
         </div>
-        <button class="btn-save" style="width:100%;margin-top:0;" onclick="uploadResume()">
+        <button type="button" class="btn-save" style="width:100%;margin-top:0;" onclick="uploadResume()">
             Upload &amp; Parse Resume
         </button>
-        <p style="font-size:0.75rem;color:var(--grey);margin-top:0.75rem;text-align:center;">
-            Skills, experience and qualifications will be auto-extracted from your PDF.
+        <p class="profile-hint" style="margin-top:0.75rem;text-align:center;">
+            Skills and qualifications will be extracted from your PDF.
         </p>
     </div>
 </div>
 
-<!-- ── Toast ── -->
 <div class="toast" id="toast"></div>
-
+{% endblock %}
+{% block scripts %}
 <script>
-// ── State ─────────────────────────────────────────────────────────
 let skills = {{ skills | tojson }};
 let roles  = {{ expected_roles | tojson }};
 
-// ── Toast ─────────────────────────────────────────────────────────
+async function confirmPendingResume() {
+    const resumeIdEl = document.getElementById('pendingResumeId');
+    if (!resumeIdEl || !resumeIdEl.value) {
+        showToast('Nothing to confirm.', 'error');
+        return;
+    }
+    const form = document.getElementById('basicForm');
+    if (!form) return;
+
+    document.getElementById('h_degree').value = document.getElementById('f_degree').value;
+    document.getElementById('h_inst').value = document.getElementById('f_inst').value;
+    document.getElementById('h_grad').value = document.getElementById('f_grad').value;
+
+    let exp = parseFloat(form.querySelector('[name=experience_years]').value);
+    if (Number.isNaN(exp)) exp = 0;
+
+    const summaryEl = document.getElementById('pendingSummary');
+    const summary = summaryEl ? summaryEl.value.trim() : '';
+
+    const btn = document.querySelector('.profile-pending-btn');
+    if (btn) btn.disabled = true;
+    showToast('Finding matching jobs…', 'info');
+
+    try {
+        const resp = await fetch('/confirm_resume_profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                resume_id: parseInt(resumeIdEl.value, 10),
+                name: form.querySelector('[name=name]').value.trim(),
+                phone: form.querySelector('[name=phone]').value.trim(),
+                location: form.querySelector('[name=location]').value.trim(),
+                experience_years: exp,
+                highest_degree: document.getElementById('f_degree').value.trim(),
+                institution: document.getElementById('f_inst').value.trim(),
+                graduation_year: document.getElementById('f_grad').value.trim(),
+                summary: summary,
+                skills: skills
+            })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            showToast(data.error || 'Could not confirm. Try again.', 'error');
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const n = (data.jobs || []).length;
+        showToast(`Profile saved. ${n} job matches found.`);
+        window.location.href = '/suggestions';
+    } catch (e) {
+        console.error(e);
+        showToast('Something went wrong.', 'error');
+        if (btn) btn.disabled = false;
+    }
+}
+
 function showToast(msg, type='success') {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -852,12 +373,11 @@ function showToast(msg, type='success') {
     setTimeout(() => t.classList.remove('show'), 4000);
 }
 
-// ── Skills ────────────────────────────────────────────────────────
 function renderSkills() {
     const wrap = document.getElementById('skillsWrap');
     document.getElementById('skillCount').textContent = skills.length + ' skills';
     if (skills.length === 0) {
-        wrap.innerHTML = `<p style="color:var(--grey);font-size:0.8rem;">No skills yet. Add them below or upload a resume.</p>`;
+        wrap.innerHTML = `<p class="profile-hint" style="margin:0;">No skills yet. Add below or upload a resume.</p>`;
         return;
     }
     wrap.innerHTML = skills.map(s => `
@@ -891,20 +411,19 @@ async function saveSkills() {
         if (data.success) {
             skills = data.skills;
             renderSkills();
-            showToast('✅ Skills saved!');
+            showToast('Skills saved!');
         } else {
-            showToast('❌ Failed to save skills', 'error');
+            showToast('Failed to save skills', 'error');
         }
     } catch(e) {
-        showToast('❌ Error saving skills', 'error');
+        showToast('Error saving skills', 'error');
     }
 }
 
-// ── Roles ─────────────────────────────────────────────────────────
 function renderRoles() {
     const wrap = document.getElementById('rolesWrap');
     if (roles.length === 0) {
-        wrap.innerHTML = `<p style="color:var(--grey);font-size:0.8rem;">No roles added yet.</p>`;
+        wrap.innerHTML = `<p class="profile-hint" style="margin:0;">No roles added yet.</p>`;
         return;
     }
     wrap.innerHTML = roles.map(r => `
@@ -935,14 +454,13 @@ async function saveRoles() {
             body: JSON.stringify({ roles })
         });
         const data = await resp.json();
-        if (data.success) showToast('✅ Roles saved!');
-        else showToast('❌ Failed to save roles', 'error');
+        if (data.success) showToast('Roles saved!');
+        else showToast('Failed to save roles', 'error');
     } catch(e) {
-        showToast('❌ Error saving roles', 'error');
+        showToast('Error saving roles', 'error');
     }
 }
 
-// ── Profile Picture ───────────────────────────────────────────────
 async function uploadPic(input) {
     if (!input.files.length) return;
     const formData = new FormData();
@@ -958,35 +476,32 @@ async function uploadPic(input) {
             } else if (img) {
                 img.src = data.pic_url + '?t=' + Date.now();
             }
-            showToast('✅ Profile picture updated!');
+            showToast('Profile picture updated!');
         } else {
-            showToast('❌ Failed to upload picture', 'error');
+            showToast('Failed to upload picture', 'error');
         }
     } catch(e) {
-        showToast('❌ Error uploading picture', 'error');
+        showToast('Error uploading picture', 'error');
     }
 }
 
-// ── Set Active Resume ─────────────────────────────────────────────
 async function setActive(id) {
-    showToast('⏳ Switching resume & finding new jobs...', 'info');
+    showToast('Switching resume and refreshing matches…', 'info');
 
     try {
         const resp = await fetch(`/profile/set_active_resume/${id}`, { method: 'POST' });
         const data = await resp.json();
 
         if (data.success) {
-            // Update all cards — remove active state
             document.querySelectorAll('.resume-item').forEach(el => {
                 el.classList.remove('active');
                 const badge = el.querySelector('.badge-active');
                 if (badge) {
                     const rid = el.id.split('-')[1];
-                    badge.outerHTML = `<button class="btn-set-active" onclick="setActive(${rid})">Set Active</button>`;
+                    badge.outerHTML = `<button type="button" class="btn-set-active" onclick="setActive(${rid})">Set Active</button>`;
                 }
             });
 
-            // Mark selected card as active
             const activeItem = document.getElementById(`resume-${id}`);
             if (activeItem) {
                 activeItem.classList.add('active');
@@ -995,21 +510,19 @@ async function setActive(id) {
             }
 
             const count = data.suggestions_count || 0;
-            const msg   = data.message || `✅ Resume switched! ${count} new job suggestions loaded.`;
+            const msg   = data.message || `Resume switched. ${count} new suggestions loaded.`;
             showToast(msg);
 
-            // Reload after 2s to show updated skills + profile badges
             setTimeout(() => location.reload(), 2000);
 
         } else {
-            showToast('❌ Failed to switch resume', 'error');
+            showToast('Failed to switch resume', 'error');
         }
     } catch(e) {
-        showToast('❌ Error switching resume', 'error');
+        showToast('Error switching resume', 'error');
     }
 }
 
-// ── Delete Resume ─────────────────────────────────────────────────
 async function deleteResume(id) {
     if (!confirm('Delete this resume? This cannot be undone.')) return;
     try {
@@ -1018,16 +531,15 @@ async function deleteResume(id) {
         if (data.success) {
             const el = document.getElementById(`resume-${id}`);
             if (el) el.remove();
-            showToast('🗑️ Resume deleted.');
+            showToast('Resume deleted.');
         } else {
-            showToast('❌ Failed to delete resume', 'error');
+            showToast('Failed to delete resume', 'error');
         }
     } catch(e) {
-        showToast('❌ Error deleting resume', 'error');
+        showToast('Error deleting resume', 'error');
     }
 }
 
-// ── Rename Resume ─────────────────────────────────────────────────
 async function renameResume(id) {
     const nameEl  = document.getElementById(`rname-${id}`);
     const current = nameEl ? nameEl.textContent.trim() : '';
@@ -1042,16 +554,15 @@ async function renameResume(id) {
         const data = await resp.json();
         if (data.success) {
             if (nameEl) nameEl.textContent = data.label;
-            showToast('✅ Resume renamed!');
+            showToast('Resume renamed!');
         } else {
-            showToast('❌ Failed to rename', 'error');
+            showToast('Failed to rename', 'error');
         }
     } catch(e) {
-        showToast('❌ Error renaming resume', 'error');
+        showToast('Error renaming resume', 'error');
     }
 }
 
-// ── Upload New Resume ─────────────────────────────────────────────
 async function uploadResume() {
     const fileInput = document.getElementById('resumeFileInput');
     const label     = document.getElementById('resumeLabel').value.trim();
@@ -1065,31 +576,31 @@ async function uploadResume() {
     formData.append('file', fileInput.files[0]);
     formData.append('label', label);
 
-    showToast('⏳ Uploading and parsing resume...', 'info');
+    showToast('Uploading and parsing resume…', 'info');
     document.getElementById('uploadModal').classList.remove('show');
 
     try {
         const resp = await fetch('/upload_resume', { method: 'POST', body: formData });
         const data = await resp.json();
 
+        if (data.success && data.pending_confirmation) {
+            showToast('Resume parsed. Opening your profile…');
+            window.location.href = '/profile';
+            return;
+        }
         if (data.resume_id) {
-            const count = (data.jobs || []).length;
-            showToast(`✅ Resume uploaded! ${count} jobs found. Refreshing...`);
-            setTimeout(() => location.reload(), 1800);
+            showToast('Resume uploaded. Refreshing…');
+            setTimeout(() => location.reload(), 800);
         } else {
-            showToast('❌ Upload failed. Please try again.', 'error');
+            showToast('Upload failed. Please try again.', 'error');
         }
     } catch(e) {
-        showToast('❌ Error uploading resume', 'error');
+        showToast('Error uploading resume', 'error');
     }
 }
 
-// ── Flash message on page load ────────────────────────────────────
 {% if message %}
-    showToast("{{ message }}", "{{ msg_type or 'success' }}");
+    showToast({{ message | tojson }}, {{ (msg_type or 'success') | tojson }});
 {% endif %}
 </script>
-
-</body>
-</html>
-
+{% endblock %}

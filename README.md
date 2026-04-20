@@ -31,9 +31,10 @@ Create a `.env` file in the project root if you need these features:
 | `SECRET_KEY` | Session cookie signing (defaults to a dev value if unset) |
 | `GOOGLE_API_KEY` | Richer resume parsing via Gemini (app falls back without it) |
 | `RAPIDAPI_KEY` | JSearch job listings via RapidAPI (subscribe to the API and add your key) |
-| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`, `EMAIL_USE_TLS` | Email notifications for job suggestions |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`, `EMAIL_USE_TLS` | Email notifications and **forgot password** reset links |
+| `APP_BASE_URL` | Public site URL (e.g. `https://yourdomain.com`) so password reset emails link to the correct host |
 
-Without API keys, registration, login, uploads, and basic matching still work; some integrations print warnings or use fallbacks.
+Without API keys, registration, login, uploads, and basic matching still work; some integrations print warnings or use fallbacks. Forgot password requires working SMTP (same variables as above).
 
 ## Run the server
 

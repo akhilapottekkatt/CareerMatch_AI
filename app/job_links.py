@@ -149,23 +149,47 @@ def scrape_remoteok(query: str) -> list:
 
         data = resp.json()
         listings = [d for d in data if isinstance(d, dict) and d.get("position")]
-        words = query.lower().split()
+        # Ignore 1-char tokens so we do not match noisy words like "c", "a", etc.
+        words = [w for w in query.lower().split() if len(w) > 1]
         matched = []
 
         for job in listings:
             title = (job.get("position") or "").lower()
             tags = " ".join(job.get("tags") or []).lower()
-            if any(w in f"{title} {tags}" for w in words):
+            description = (job.get("description") or "").lower()
+            company = (job.get("company") or "").lower()
+            haystack = f"{title} {tags} {description} {company}"
+            if not words or any(w in haystack for w in words):
+                salary_min = job.get("salary_min")
+                salary_max = job.get("salary_max")
+                if salary_min and salary_max:
+                    salary = f"{salary_min}-{salary_max}"
+                else:
+                    salary = str(salary_min or salary_max or "")
+
+                location = job.get("location") or "Remote"
+                url = job.get("apply_url") or job.get("url") or ""
+
+                tags_lower = [str(t).lower() for t in (job.get("tags") or [])]
+                if "contract" in tags_lower:
+                    job_type = "Contract"
+                elif "part-time" in tags_lower or "part time" in tags_lower:
+                    job_type = "Part-time"
+                elif "internship" in tags_lower:
+                    job_type = "Internship"
+                else:
+                    job_type = "Remote Full-time"
+
                 matched.append(
                     {
                         "title": job.get("position", ""),
                         "company": job.get("company", ""),
-                        "location": "Remote",
-                        "url": job.get("url", ""),
+                        "location": location,
+                        "url": url,
                         "description": (job.get("description") or "")[:500],
                         "platform": "RemoteOK",
-                        "salary": job.get("salary", ""),
-                        "job_type": "Remote Full-time",
+                        "salary": salary,
+                        "job_type": job_type,
                         "posted": (job.get("date") or "")[:10],
                     }
                 )

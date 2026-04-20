@@ -173,6 +173,18 @@ def create_users_table():
             status      TEXT    DEFAULT 'applied'  -- applied/interview/offer/rejected
         );
 
+        -- ── Password reset (forgot password flow) ───────────────
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            token_hash  TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            used_at     TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash);
+        CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+
     """)
 
     # Existing DBs may predate created_at on users — add column if missing.
@@ -212,6 +224,25 @@ def create_users_table():
             """)
     if user_cols and "is_admin" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+
+    if not conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='password_reset_tokens'"
+    ).fetchone():
+        conn.execute("""
+            CREATE TABLE password_reset_tokens (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(id),
+                token_hash  TEXT NOT NULL,
+                expires_at  TEXT NOT NULL,
+                used_at     TEXT
+            )
+            """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id)"
+        )
 
     conn.commit()
     conn.close()

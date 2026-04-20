@@ -13,7 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import create_users_table, sync_admins_from_env
-from app.auth import authenticate_user
+from app.auth import (
+    authenticate_user,
+    create_password_reset_token,
+    delete_pending_reset_tokens_for_user,
+    reset_password_with_token,
+    validate_password_reset_token,
+)
+from app.email_notifier import send_password_reset_email
 from app.resume_extracter import extract_text
 from app.resume_parser import parse_resume
 from app.job_links import generate_redirect_links
@@ -205,6 +212,114 @@ def login_user(
     request.session["message"] = "Invalid email or password"
     request.session["msg_type"] = "error"
     return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request):
+    return templates.TemplateResponse(
+        "forgot_password.html",
+        _template_ctx(
+            request,
+            message=request.session.pop("message", None),
+            msg_type=request.session.pop("msg_type", None),
+            active_nav=None,
+        ),
+    )
+
+
+@app.post("/forgot-password")
+def forgot_password_submit(request: Request, email: str = Form(...)):
+    token, user_id, delivery_email = create_password_reset_token(email)
+    if token and user_id and delivery_email:
+        base = (os.getenv("APP_BASE_URL") or str(request.base_url).rstrip("/")).rstrip(
+            "/"
+        )
+        reset_url = f"{base}/reset-password?token={token}"
+        sent = send_password_reset_email(delivery_email, reset_url)
+        if not sent:
+            delete_pending_reset_tokens_for_user(user_id)
+            request.session["message"] = (
+                "We could not send the reset email right now. "
+                "Check SMTP settings or try again later."
+            )
+            request.session["msg_type"] = "error"
+            return RedirectResponse("/forgot-password", status_code=303)
+    request.session["message"] = (
+        "If an account exists for that email, you will receive a password reset link shortly."
+    )
+    request.session["msg_type"] = "success"
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(request: Request, token: str = ""):
+    if not token:
+        request.session["message"] = "Reset link is invalid or incomplete."
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/forgot-password", status_code=303)
+    if not validate_password_reset_token(token):
+        return templates.TemplateResponse(
+            "reset_password.html",
+            _template_ctx(
+                request,
+                token="",
+                invalid_link=True,
+                active_nav=None,
+            ),
+        )
+    return templates.TemplateResponse(
+        "reset_password.html",
+        _template_ctx(
+            request,
+            token=token,
+            invalid_link=False,
+            active_nav=None,
+        ),
+    )
+
+
+@app.post("/reset-password")
+def reset_password_submit(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    repeat_password: str = Form(...),
+):
+    if not validate_password_reset_token(token):
+        request.session["message"] = "This reset link is invalid or has expired."
+        request.session["msg_type"] = "error"
+        return RedirectResponse("/forgot-password", status_code=303)
+    if password != repeat_password:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            _template_ctx(
+                request,
+                token=token,
+                invalid_link=False,
+                message="Passwords do not match.",
+                msg_type="error",
+                active_nav=None,
+            ),
+        )
+    if len(password) < 8:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            _template_ctx(
+                request,
+                token=token,
+                invalid_link=False,
+                message="Password must be at least 8 characters.",
+                msg_type="error",
+                active_nav=None,
+            ),
+        )
+    if reset_password_with_token(token, password):
+        request.session["message"] = "Your password was updated. You can sign in now."
+        request.session["msg_type"] = "success"
+        return RedirectResponse("/login", status_code=303)
+    request.session["message"] = "Could not reset password. Please request a new link."
+    request.session["msg_type"] = "error"
+    return RedirectResponse("/forgot-password", status_code=303)
 
 
 @app.get("/logout")
@@ -919,9 +1034,11 @@ async def send_best_matches(request: Request):
         return JSONResponse({"error": "Not logged in"}, status_code=401)
 
     suggestions = models.get_suggestions(user["id"])
-    top_jobs = suggestions[:10]
+    top_jobs = suggestions[:5]
 
-    sent = send_best_jobs_email(user.get("email", ""), top_jobs)
+    sent = send_best_jobs_email(
+        user.get("email", ""), top_jobs, username=user.get("name")
+    )
     return JSONResponse({"sent": sent})
 
 

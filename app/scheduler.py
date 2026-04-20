@@ -12,10 +12,7 @@ On startup, a background thread runs the full pipeline once immediately.
 
 import os
 import json
-import smtplib
 import threading
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -28,226 +25,7 @@ from app.company_matcher import (
     gather_union_queries_from_profiles,
     fetch_global_job_pool,
 )
-
-# ═══════════════════════════════════════════════════════════════════
-# EMAIL — sends notification after suggestions are updated
-# ═══════════════════════════════════════════════════════════════════
-
-
-def _send_notification_email(to_email: str, username: str, jobs: list):
-    """
-    Send an HTML email to the user showing their top 5 new job matches.
-    Reads SMTP config from .env — same variables as email_notifier.py.
-    Returns True on success, False on failure.
-    """
-    host = os.getenv("EMAIL_HOST")
-    port = int(os.getenv("EMAIL_PORT", "587"))
-    user = os.getenv("EMAIL_USER")
-    password = os.getenv("EMAIL_PASSWORD")
-    from_email = os.getenv("EMAIL_FROM") or user
-    use_tls = os.getenv("EMAIL_USE_TLS", "1").lower() in ("1", "true", "yes")
-
-    # Skip silently if SMTP not configured
-    if not host or not user or not password:
-        print(f"  ⚠️  SMTP not configured — skipping email to {to_email}")
-        return False
-
-    if not to_email:
-        return False
-
-    # ── Build HTML email body ──────────────────────────────────────
-    now = datetime.now().strftime("%d %b %Y %H:%M")
-    top_jobs = jobs[:5]
-
-    # Build one row per job
-    job_rows = ""
-    for i, job in enumerate(top_jobs, 1):
-        score = job.get("match_score", 0)
-        score_pct = f"{round(score * 100)}%" if score <= 1 else f"{int(score)}%"
-        platform = job.get("platform", "Job Board")
-        title = job.get("title", "Role not specified")
-        company = job.get("company", "Unknown company")
-        apply_url = job.get("apply_url", "")
-
-        # Score colour
-        if score >= 0.6:
-            color = "#10B981"  # green
-            label = "Strong Match"
-        elif score >= 0.3:
-            color = "#F59E0B"  # amber
-            label = "Good Match"
-        else:
-            color = "#6366F1"  # purple
-            label = "Partial Match"
-
-        apply_btn = (
-            f"""
-            <a href="{apply_url}" style="
-                display:inline-block;
-                padding:6px 14px;
-                background:#2563EB;
-                color:#fff;
-                border-radius:6px;
-                text-decoration:none;
-                font-size:12px;
-                font-weight:600;
-            ">Apply →</a>
-        """
-            if apply_url
-            else ""
-        )
-
-        job_rows += f"""
-        <tr>
-          <td style="padding:12px 16px;border-bottom:1px solid #1e293b;">
-            <div style="font-weight:600;font-size:14px;color:#f1f5f9;">{i}. {title}</div>
-            <div style="font-size:12px;color:#94a3b8;margin-top:2px;">{company} · {platform}</div>
-          </td>
-          <td style="padding:12px 16px;border-bottom:1px solid #1e293b;text-align:center;">
-            <span style="
-                background:{color}22;
-                color:{color};
-                border:1px solid {color}55;
-                border-radius:20px;
-                padding:3px 10px;
-                font-size:11px;
-                font-weight:700;
-            ">{score_pct} {label}</span>
-          </td>
-          <td style="padding:12px 16px;border-bottom:1px solid #1e293b;text-align:center;">
-            {apply_btn}
-          </td>
-        </tr>
-        """
-
-    html_body = f"""
-    <!DOCTYPE html>
-    <html>
-    <body style="margin:0;padding:0;background:#0f0f13;font-family:'Segoe UI',Arial,sans-serif;">
-      <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
-
-        <!-- Header -->
-        <div style="
-            background:linear-gradient(135deg,#2563EB,#7C3AED);
-            border-radius:16px 16px 0 0;
-            padding:28px 32px;
-            text-align:center;
-        ">
-          <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px;">
-            CareerMatch AI
-          </div>
-          <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;">
-            Your hourly job suggestions are ready
-          </div>
-        </div>
-
-        <!-- Body -->
-        <div style="
-            background:#16213E;
-            border:1px solid rgba(124,58,237,0.2);
-            border-top:none;
-            border-radius:0 0 16px 16px;
-            padding:28px 32px;
-        ">
-          <p style="color:#94a3b8;font-size:14px;margin:0 0 8px;">
-            Hi <strong style="color:#f1f5f9;">{username}</strong>,
-          </p>
-          <p style="color:#94a3b8;font-size:14px;margin:0 0 24px;">
-            We refreshed your job suggestions at <strong style="color:#f1f5f9;">{now}</strong>.
-            Here are your top {len(top_jobs)} matches:
-          </p>
-
-          <!-- Jobs table -->
-          <table style="width:100%;border-collapse:collapse;border-radius:10px;overflow:hidden;">
-            <thead>
-              <tr style="background:rgba(124,58,237,0.15);">
-                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#a78bfa;text-transform:uppercase;letter-spacing:0.05em;">Role</th>
-                <th style="padding:10px 16px;text-align:center;font-size:11px;color:#a78bfa;text-transform:uppercase;letter-spacing:0.05em;">Match</th>
-                <th style="padding:10px 16px;text-align:center;font-size:11px;color:#a78bfa;text-transform:uppercase;letter-spacing:0.05em;">Apply</th>
-              </tr>
-            </thead>
-            <tbody>
-              {job_rows}
-            </tbody>
-          </table>
-
-          <!-- CTA -->
-          <div style="text-align:center;margin-top:28px;">
-            <a href="http://127.0.0.1:8000/suggestions" style="
-                display:inline-block;
-                padding:12px 32px;
-                background:linear-gradient(135deg,#2563EB,#7C3AED);
-                color:#fff;
-                border-radius:10px;
-                text-decoration:none;
-                font-weight:700;
-                font-size:14px;
-            ">View All {len(jobs)} Suggestions →</a>
-          </div>
-
-          <p style="
-              color:#475569;
-              font-size:11px;
-              text-align:center;
-              margin-top:24px;
-              border-top:1px solid #1e293b;
-              padding-top:16px;
-          ">
-            This email was sent automatically by CareerMatch AI · Suggestions refresh every hour
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """
-
-    # ── Plain text fallback ────────────────────────────────────────
-    plain_lines = [
-        f"Hi {username},",
-        f"",
-        f"Your job suggestions were updated at {now}.",
-        f"Here are your top matches:",
-        f"",
-    ]
-    for i, job in enumerate(top_jobs, 1):
-        score = job.get("match_score", 0)
-        score_pct = f"{round(score * 100)}%" if score <= 1 else f"{int(score)}%"
-        plain_lines.append(
-            f"{i}. {job.get('title','')} at {job.get('company','')} "
-            f"({job.get('platform','')}) — {score_pct} match"
-        )
-        if job.get("apply_url"):
-            plain_lines.append(f"   Apply: {job.get('apply_url')}")
-        plain_lines.append("")
-
-    plain_lines.append("View all suggestions: http://127.0.0.1:8000/suggestions")
-    plain_lines.append("")
-    plain_lines.append("— CareerMatch AI")
-    plain_text = "\n".join(plain_lines)
-
-    # ── Send ───────────────────────────────────────────────────────
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"CareerMatch AI — {len(jobs)} new job suggestions ready"
-        msg["From"] = from_email
-        msg["To"] = to_email
-
-        msg.attach(MIMEText(plain_text, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-
-        with smtplib.SMTP(host, port) as server:
-            if use_tls:
-                server.starttls()
-            server.login(user, password)
-            server.send_message(msg)
-
-        print(f"  📧 Email sent → {to_email}")
-        return True
-
-    except Exception as e:
-        print(f"  ❌ Email failed → {to_email}: {e}")
-        return False
-
+from app.email_notifier import send_best_jobs_email
 
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 1 — fetch global pool → ``jobs`` table
@@ -308,7 +86,7 @@ def sync_global_jobs_to_database():
 def match_all_users_from_job_catalog():
     """
     Load the global catalog from ``jobs``, batch-match every eligible resume,
-    then replace unapplied suggestions per user and send notification emails.
+    then replace unapplied suggestions per user.
     """
     print(f"\n{'='*55}")
     print(
@@ -398,7 +176,6 @@ def match_all_users_from_job_catalog():
             models.delete_unapplied_suggestions(uid)
             if jobs:
                 models.insert_job_suggestions(uid, jobs)
-                _send_notification_email(email, username, jobs)
             success += 1
         except Exception as e:
             print(f"  ❌ Save/email failed for user {uid}: {e}")
@@ -407,6 +184,49 @@ def match_all_users_from_job_catalog():
     print(f"\n{'='*55}")
     print(f"✅ Match phase done — {success} user(s) updated, {failed} failed")
     print(f"{'='*55}\n")
+
+
+def send_daily_top5_emails():
+    """
+    Send one daily digest email per user using the latest stored suggestions.
+    """
+    print(f"\n{'='*55}")
+    print(f"📧 Daily digest run — {datetime.now().strftime('%d %b %Y %H:%M')}")
+    print(f"{'='*55}")
+
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, email, name
+            FROM users
+            WHERE email IS NOT NULL AND trim(email) != ''
+            ORDER BY id ASC
+        """).fetchall()
+    finally:
+        conn.close()
+
+    sent = 0
+    skipped = 0
+    failed = 0
+
+    for row in rows:
+        uid = row["id"]
+        email = row["email"]
+        username = row["name"] or "there"
+        jobs = models.get_suggestions(uid)[:5]
+        if not jobs:
+            skipped += 1
+            print(f"  ↪️  User {uid}: no suggestions, skipped")
+            continue
+        ok = send_best_jobs_email(email, jobs, username=username)
+        if ok:
+            sent += 1
+            print(f"  ✅ User {uid}: email sent")
+        else:
+            failed += 1
+            print(f"  ❌ User {uid}: email failed")
+
+    print(f"✅ Daily digest done — sent={sent}, skipped={skipped}, failed={failed}\n")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -452,15 +272,24 @@ def start_scheduler():
         name="Hourly match users ← jobs table",
         replace_existing=True,
     )
+    daily_hour = int(os.getenv("DAILY_EMAIL_HOUR", "9"))
+    daily_minute = int(os.getenv("DAILY_EMAIL_MINUTE", "0"))
+    _scheduler.add_job(
+        func=send_daily_top5_emails,
+        trigger=CronTrigger(hour=daily_hour, minute=daily_minute),
+        id="daily_top5_email_digest",
+        name="Daily top-5 email digest",
+        replace_existing=True,
+    )
 
     _scheduler.start()
     jf = _scheduler.get_job("hourly_fetch_jobs")
     jm = _scheduler.get_job("hourly_match_users")
-    print(
-        "✅ Scheduler started — fetch at :00 each hour, match at :10 each hour + email"
-    )
+    jd = _scheduler.get_job("daily_top5_email_digest")
+    print("✅ Scheduler started — fetch hourly, match hourly, email daily")
     print(f"   Next fetch: {jf.next_run_time if jf else 'n/a'}")
     print(f"   Next match: {jm.next_run_time if jm else 'n/a'}")
+    print(f"   Next daily email: {jd.next_run_time if jd else 'n/a'}")
 
     t = threading.Thread(target=refresh_all_users, daemon=True)
     t.start()

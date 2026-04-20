@@ -1,19 +1,19 @@
 from passlib.context import CryptContext
-from database import get_connection
+from app.database import get_connection
 from sqlite3 import IntegrityError
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 def hash_password(password: str):
     return pwd_context.hash(password)
 
+
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
 
-def create_user(username, email, password):
+
+def create_user(name, email, password):
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -22,8 +22,8 @@ def create_user(username, email, password):
 
     try:
         cursor.execute(
-            "INSERT INTO users (username,email,password) VALUES (?,?,?)",
-            (username, email, hashed_password)
+            "INSERT INTO users (name,email,password) VALUES (?,?,?)",
+            (name, email, hashed_password),
         )
 
         conn.commit()
@@ -34,15 +34,13 @@ def create_user(username, email, password):
     finally:
         conn.close()
 
+
 def authenticate_user(email, password):
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT email,password FROM users WHERE email=?",
-        (email,)
-    )
+    cursor.execute("SELECT email,password FROM users WHERE email=?", (email,))
 
     user = cursor.fetchone()
     conn.close()

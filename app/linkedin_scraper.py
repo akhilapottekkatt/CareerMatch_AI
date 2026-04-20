@@ -4,6 +4,7 @@ Adapted from the LinkedIn guest / jobs-guest HTML pattern (BeautifulSoup).
 
 Note: LinkedIn markup and endpoints change; failures are handled gracefully.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,7 +26,9 @@ DEFAULT_HEADERS = {
 GUEST_SEARCH = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 
 
-def _get_soup(url: str, headers: dict | None = None, timeout: int = 15, retries: int = 3) -> BeautifulSoup | None:
+def _get_soup(
+    url: str, headers: dict | None = None, timeout: int = 15, retries: int = 3
+) -> BeautifulSoup | None:
     h = {**DEFAULT_HEADERS, **(headers or {})}
     for attempt in range(retries):
         try:
@@ -49,7 +52,9 @@ def _parse_listing_cards(soup: BeautifulSoup | None) -> list[dict]:
             h3 = item.find("h3")
             title = h3.get_text(strip=True) if h3 else ""
             company_a = item.find("a", class_="hidden-nested-link")
-            company = company_a.get_text(strip=True).replace("\n", " ") if company_a else ""
+            company = (
+                company_a.get_text(strip=True).replace("\n", " ") if company_a else ""
+            )
             loc_el = item.find("span", class_="job-search-card__location")
             location = loc_el.get_text(strip=True) if loc_el else ""
             parent = item.parent
@@ -65,14 +70,16 @@ def _parse_listing_cards(soup: BeautifulSoup | None) -> list[dict]:
                 dt = date_tag["datetime"]
             elif date_tag_new and date_tag_new.get("datetime"):
                 dt = date_tag_new["datetime"]
-            jobs.append({
-                "title": title,
-                "company": company,
-                "location": location,
-                "date": dt,
-                "job_url": job_url,
-                "job_description": "",
-            })
+            jobs.append(
+                {
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "date": dt,
+                    "job_url": job_url,
+                    "job_description": "",
+                }
+            )
         except Exception:
             continue
     return jobs
@@ -143,28 +150,34 @@ def scrape_linkedin_guest(
         n = min(len(unique), max_description_fetches)
         for i, job in enumerate(unique[:n]):
             soup = _get_soup(job["job_url"])
-            job["job_description"] = _parse_description_html(soup) or job.get("title", "")
+            job["job_description"] = _parse_description_html(soup) or job.get(
+                "title", ""
+            )
             if i < n - 1:
                 time.sleep(delay_between_desc)
         for job in unique[n:]:
-            job["job_description"] = (job.get("title", "") + " " + job.get("company", "")).strip()
+            job["job_description"] = (
+                job.get("title", "") + " " + job.get("company", "")
+            ).strip()
 
     # Map to app schema
     mapped: list[dict] = []
     for job in unique:
         desc = job.get("job_description") or ""
         posted = (job.get("date") or "")[:10]
-        mapped.append({
-            "title": job.get("title", ""),
-            "company": job.get("company", ""),
-            "location": job.get("location", ""),
-            "url": job.get("job_url", ""),
-            "description": desc,
-            "platform": "LinkedIn",
-            "salary": "",
-            "job_type": "Full-time",
-            "posted": posted,
-        })
+        mapped.append(
+            {
+                "title": job.get("title", ""),
+                "company": job.get("company", ""),
+                "location": job.get("location", ""),
+                "url": job.get("job_url", ""),
+                "description": desc,
+                "platform": "LinkedIn",
+                "salary": "",
+                "job_type": "Full-time",
+                "posted": posted,
+            }
+        )
 
     if os.getenv("LINKEDIN_SCRAPE_DEBUG"):
         print(f"   → LinkedIn guest: {len(mapped)} jobs for query {query!r}")

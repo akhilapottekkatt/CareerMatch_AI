@@ -42,6 +42,29 @@ source venv/bin/activate          # if not already active
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+You can also run the app directly from the package entrypoint:
+
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+## Project structure
+
+```text
+CareerMatch_AI/
+├── app/
+│   ├── main.py
+│   ├── database.py
+│   ├── models.py
+│   ├── auth.py
+│   ├── scheduler.py
+│   └── ... (services and helpers)
+├── templates/
+├── static/
+├── uploads/
+└── main.py  # compatibility entrypoint -> app.main:app
+```
+
 Open **http://127.0.0.1:8000** — you will be redirected to `/login`. Create an account at `/register`, then sign in and upload a resume from the dashboard.
 
 ## Data on disk

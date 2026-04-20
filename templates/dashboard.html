@@ -1,57 +1,333 @@
 {% extends "base.html" %}
 {% block title %}CareerMatch AI · Dashboard{% endblock %}
+{% block body_class %}ui-light{% endblock %}
+{% block extra_css %}
+<style>
+.home-main {
+    background: #f4f5fc;
+    min-height: calc(100vh - 60px);
+    padding: 1.6rem 1rem 2.2rem;
+}
+
+.home-wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 1rem;
+}
+
+.home-card {
+    border-radius: 26px;
+    border: 1px solid #e6e8f3;
+    background: #ffffff;
+    padding: 1.25rem;
+}
+
+.home-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.home-pill {
+    display: inline-flex;
+    width: max-content;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #6d7490;
+    background: #f0f2fb;
+    border-radius: 999px;
+    padding: 0.32rem 0.75rem;
+}
+
+.home-title {
+    margin: 0;
+    font-size: clamp(2rem, 5vw, 4rem);
+    line-height: 0.96;
+    color: #121829;
+    letter-spacing: -0.03em;
+}
+
+.home-copy {
+    margin: 0;
+    color: #49516a;
+    line-height: 1.55;
+    font-size: 1.02rem;
+    max-width: 36ch;
+}
+
+.home-features {
+    display: grid;
+    gap: 1rem;
+}
+
+.home-feature {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.home-feature-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: #eff2fb;
+    display: grid;
+    place-items: center;
+    color: #264ad9;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.home-feature h4 {
+    margin: 0 0 0.2rem;
+    color: #1d2437;
+    font-size: 1.02rem;
+}
+
+.home-feature p {
+    margin: 0;
+    color: #5f6780;
+    font-size: 0.93rem;
+    line-height: 1.45;
+}
+
+.home-preview {
+    min-height: 180px;
+    border-radius: 20px;
+    background:
+        radial-gradient(ellipse 60% 40% at 25% 20%, rgba(59, 130, 246, 0.4), transparent 65%),
+        radial-gradient(ellipse 50% 35% at 80% 70%, rgba(79, 70, 229, 0.45), transparent 68%),
+        linear-gradient(155deg, #213251, #0f172a);
+}
+
+.home-right {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+.upload-card h2 {
+    margin: 0;
+    color: #151b2c;
+    font-size: 2rem;
+}
+
+.upload-card .sub {
+    margin: 0.3rem 0 1rem;
+    color: #68718b;
+}
+
+.dropzone {
+    border: 1px dashed #b9c1da;
+    border-radius: 18px;
+    background: #f6f7fe;
+    padding: 1.6rem;
+    text-align: center;
+}
+
+.dropzone h4 {
+    margin: 0.6rem 0 0.3rem;
+    color: #1f2638;
+    font-size: 1.2rem;
+}
+
+.dropzone p {
+    margin: 0;
+    color: #636c88;
+}
+
+.dropzone .cm-input {
+    background: #fff;
+    border: 1px solid #d8dced;
+    color: #1f2737;
+    margin-top: 0.85rem;
+}
+
+.upload-cta {
+    width: 100%;
+    margin-top: 0.95rem;
+    border-radius: 999px;
+    border: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #fff;
+    background: linear-gradient(135deg, #1f4fee, #2445c9);
+    padding: 0.9rem 1.2rem;
+    cursor: pointer;
+}
+
+.upload-note {
+    margin: 0.65rem 0 0;
+    text-align: center;
+    color: #7c8398;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.readiness {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    align-items: center;
+    gap: 0.85rem;
+    background: #f4f6ff;
+}
+
+.readiness .pct {
+    width: 62px;
+    height: 62px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    color: #28774c;
+    background: conic-gradient(#47d07d 35%, #dde2ef 35% 100%);
+}
+
+.readiness .pct span {
+    background: #fff;
+    width: 50px;
+    height: 50px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 0.9rem;
+}
+
+.readiness h4 {
+    margin: 0;
+    color: #1f2738;
+}
+
+.readiness p {
+    margin: 0.18rem 0 0;
+    color: #5f6780;
+    line-height: 1.4;
+}
+
+.readiness a {
+    color: #234cd2;
+    font-weight: 700;
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+}
+
+.fact {
+    border: 1px solid #e6e8f3;
+    border-radius: 16px;
+    background: #fff;
+    padding: 1rem;
+}
+
+.fact .k {
+    color: #707893;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.fact .v {
+    margin-top: 0.25rem;
+    color: #151b2c;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+#result.cm-results {
+    margin-top: 0.8rem;
+}
+
+@media (max-width: 980px) {
+    .home-wrap {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
 {% block content %}
-<main id="main-content" class="cm-main">
-    <section class="cm-shell">
-        <aside class="cm-panel cm-panel-info">
-            <h1 class="cm-title">Smart job matching from your resume</h1>
-            <p class="cm-subtitle">
-                Upload your latest resume and let CareerMatch AI extract your skills,
-                search leading job platforms, and surface tailored matches.
+<main id="main-content" class="home-main">
+    <section class="home-wrap">
+        <aside class="home-card home-hero">
+            <span class="home-pill">AI-powered curation</span>
+            <h1 class="home-title">Smart job matching from your resume</h1>
+            <p class="home-copy">
+                Our Digital Curator parses your professional DNA to find opportunities
+                that align with your role goals and trajectory.
             </p>
-            <ul class="cm-features">
-                <li>Parse skills and experience from PDF or DOCX</li>
-                <li>Search LinkedIn, Indeed, Naukri, and more</li>
-                <li>Ranked suggestions with match scores</li>
-                <li>Optional email summaries of top matches</li>
-            </ul>
+            <div class="home-features">
+                <article class="home-feature">
+                    <span class="home-feature-icon">⚙</span>
+                    <div>
+                        <h4>Semantic Parsing</h4>
+                        <p>We understand skills beyond keywords and build cleaner candidate signals.</p>
+                    </div>
+                </article>
+                <article class="home-feature">
+                    <span class="home-feature-icon">📈</span>
+                    <div>
+                        <h4>Growth Projections</h4>
+                        <p>Recommendations adapt to where your career is heading, not only past titles.</p>
+                    </div>
+                </article>
+                <article class="home-feature">
+                    <span class="home-feature-icon">🛡</span>
+                    <div>
+                        <h4>Private Matching</h4>
+                        <p>Your profile data is curated privately. You control what becomes visible.</p>
+                    </div>
+                </article>
+            </div>
+            <div class="home-preview" aria-hidden="true"></div>
         </aside>
 
-        <section class="cm-panel cm-panel-form">
-            <h2 class="cm-panel-title">Upload resume</h2>
-            <p class="cm-panel-description">
-                Upload your resume — we parse it and open your profile for review. Confirm your details there, then we run job matching.
-            </p>
+        <section class="home-right">
+            <article class="home-card upload-card">
+                <h2>Start your dossier</h2>
+                <p class="sub">Upload your CV / Resume (PDF, DOCX)</p>
+                <form id="uploadForm" class="cm-form">
+                    <div class="dropzone">
+                        <div style="font-size:2rem;">☁</div>
+                        <h4>Drag &amp; drop your file here</h4>
+                        <p>or choose a file manually</p>
+                        <input type="file" id="resume" accept="application/pdf,.docx" required class="cm-input">
+                    </div>
+                    <button type="submit" class="upload-cta">Upload &amp; Parse Resume</button>
+                    <p class="upload-note">Secure 256-bit AES encryption active</p>
+                </form>
+                <section id="result" class="cm-results cm-results-empty" aria-live="polite">
+                    <p class="cm-placeholder">After upload you will be redirected to profile review.</p>
+                </section>
+            </article>
 
-            <div class="cm-banner">
-                <div class="cm-banner-text">
-                    <strong>Complete your profile</strong>
-                    <span>Add preferences and target roles for better matches.</span>
+            <article class="home-card readiness">
+                <div class="pct"><span>35%</span></div>
+                <div>
+                    <h4>Profile Readiness</h4>
+                    <p>Your profile is partially complete. Adding a resume boosts visibility.</p>
                 </div>
-                <div class="cm-banner-actions">
-                    <a href="/profile" class="cm-link-btn">Go to profile</a>
-                </div>
-            </div>
+                <a href="/profile">View Profile</a>
+            </article>
 
-            <form id="uploadForm" class="cm-form">
-                <div class="cm-field cm-field-file">
-                    <label for="resume" class="cm-label">Resume (PDF or DOCX)</label>
-                    <input type="file" id="resume" accept="application/pdf,.docx" required class="cm-input">
-                </div>
-
-                <button type="submit" class="cm-button cm-button-primary">
-                    Upload &amp; parse resume
-                </button>
-
-                <p class="cm-hint">
-                    We never share your resume with third parties without your consent.
-                </p>
-            </form>
-
-            <section id="result" class="cm-results cm-results-empty" aria-live="polite">
-                <p class="cm-placeholder">
-                    After upload you will be redirected to your profile to review parsed data.
-                </p>
+            <section class="facts">
+                <article class="fact">
+                    <div class="k">Work history</div>
+                    <div class="v">{% if has_resume %}Detected{% else %}Incomplete{% endif %}</div>
+                </article>
+                <article class="fact">
+                    <div class="k">Education</div>
+                    <div class="v">{% if has_resume and resume %}1+ Entry Found{% else %}Awaiting Resume{% endif %}</div>
+                </article>
             </section>
         </section>
     </section>

@@ -33,6 +33,7 @@ CACHE_FILE = "resume_cache.json"
 # CACHE
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _get_cache() -> dict:
     """Load cached results from disk."""
     try:
@@ -64,54 +65,199 @@ def _hash_text(text: str) -> str:
 
 KNOWN_SKILLS = {
     # Programming Languages
-    "python", "java", "javascript", "typescript", "c++", "c#", "c",
-    "ruby", "php", "swift", "kotlin", "go", "rust", "scala", "r",
-    "matlab", "bash", "shell", "powershell", "perl", "dart", "lua",
-    "haskell", "elixir", "clojure", "groovy", "objective-c", "cobol",
+    "python",
+    "java",
+    "javascript",
+    "typescript",
+    "c++",
+    "c#",
+    "c",
+    "ruby",
+    "php",
+    "swift",
+    "kotlin",
+    "go",
+    "rust",
+    "scala",
+    "r",
+    "matlab",
+    "bash",
+    "shell",
+    "powershell",
+    "perl",
+    "dart",
+    "lua",
+    "haskell",
+    "elixir",
+    "clojure",
+    "groovy",
+    "objective-c",
+    "cobol",
     # Web Frameworks
-    "django", "flask", "fastapi", "react", "angular", "vue", "nextjs",
-    "nodejs", "express", "spring", "laravel", "asp.net", "rails",
-    "nuxtjs", "gatsby", "svelte", "phoenix", "gin", "echo",
+    "django",
+    "flask",
+    "fastapi",
+    "react",
+    "angular",
+    "vue",
+    "nextjs",
+    "nodejs",
+    "express",
+    "spring",
+    "laravel",
+    "asp.net",
+    "rails",
+    "nuxtjs",
+    "gatsby",
+    "svelte",
+    "phoenix",
+    "gin",
+    "echo",
     # Frontend
-    "html", "css", "bootstrap", "tailwind", "jquery", "redux",
-    "webpack", "babel", "sass", "less", "material ui", "chakra ui",
+    "html",
+    "css",
+    "bootstrap",
+    "tailwind",
+    "jquery",
+    "redux",
+    "webpack",
+    "babel",
+    "sass",
+    "less",
+    "material ui",
+    "chakra ui",
     # Databases
-    "mysql", "postgresql", "sqlite", "mongodb", "redis", "oracle",
-    "cassandra", "dynamodb", "firebase", "elasticsearch", "sql",
-    "mariadb", "couchdb", "neo4j", "supabase", "cockroachdb",
+    "mysql",
+    "postgresql",
+    "sqlite",
+    "mongodb",
+    "redis",
+    "oracle",
+    "cassandra",
+    "dynamodb",
+    "firebase",
+    "elasticsearch",
+    "sql",
+    "mariadb",
+    "couchdb",
+    "neo4j",
+    "supabase",
+    "cockroachdb",
     # Cloud & DevOps
-    "aws", "azure", "gcp", "docker", "kubernetes", "jenkins",
-    "terraform", "ansible", "git", "github", "gitlab", "linux",
-    "nginx", "ci/cd", "devops", "bitbucket", "circleci", "travis ci",
-    "prometheus", "grafana", "helm", "istio", "cloudflare",
+    "aws",
+    "azure",
+    "gcp",
+    "docker",
+    "kubernetes",
+    "jenkins",
+    "terraform",
+    "ansible",
+    "git",
+    "github",
+    "gitlab",
+    "linux",
+    "nginx",
+    "ci/cd",
+    "devops",
+    "bitbucket",
+    "circleci",
+    "travis ci",
+    "prometheus",
+    "grafana",
+    "helm",
+    "istio",
+    "cloudflare",
     # AI / ML / Data
-    "machine learning", "deep learning", "tensorflow", "pytorch",
-    "keras", "scikit-learn", "opencv", "nlp", "computer vision",
-    "pandas", "numpy", "matplotlib", "seaborn", "jupyter",
-    "huggingface", "bert", "transformers", "langchain", "llm",
-    "data science", "data analysis", "power bi", "tableau",
-    "hadoop", "spark", "airflow", "dbt", "snowflake", "bigquery",
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "keras",
+    "scikit-learn",
+    "opencv",
+    "nlp",
+    "computer vision",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "seaborn",
+    "jupyter",
+    "huggingface",
+    "bert",
+    "transformers",
+    "langchain",
+    "llm",
+    "data science",
+    "data analysis",
+    "power bi",
+    "tableau",
+    "hadoop",
+    "spark",
+    "airflow",
+    "dbt",
+    "snowflake",
+    "bigquery",
     # Mobile
-    "android", "ios", "react native", "flutter", "xamarin",
+    "android",
+    "ios",
+    "react native",
+    "flutter",
+    "xamarin",
     # Testing
-    "selenium", "pytest", "junit", "jest", "postman", "cypress",
-    "playwright", "mocha", "chai", "robot framework",
+    "selenium",
+    "pytest",
+    "junit",
+    "jest",
+    "postman",
+    "cypress",
+    "playwright",
+    "mocha",
+    "chai",
+    "robot framework",
     # Tools & Methodologies
-    "jira", "figma", "excel", "agile", "scrum", "kanban",
-    "rest api", "graphql", "microservices", "soap", "grpc",
-    "linux", "unix", "vim", "vs code", "intellij",
+    "jira",
+    "figma",
+    "excel",
+    "agile",
+    "scrum",
+    "kanban",
+    "rest api",
+    "graphql",
+    "microservices",
+    "soap",
+    "grpc",
+    "linux",
+    "unix",
+    "vim",
+    "vs code",
+    "intellij",
     # Security
-    "cybersecurity", "penetration testing", "owasp", "oauth",
-    "jwt", "ssl", "tls", "encryption", "firewall",
+    "cybersecurity",
+    "penetration testing",
+    "owasp",
+    "oauth",
+    "jwt",
+    "ssl",
+    "tls",
+    "encryption",
+    "firewall",
     # Other
-    "blockchain", "web3", "solidity", "unity", "unreal engine",
-    "arduino", "raspberry pi", "iot", "embedded systems",
+    "blockchain",
+    "web3",
+    "solidity",
+    "unity",
+    "unreal engine",
+    "arduino",
+    "raspberry pi",
+    "iot",
+    "embedded systems",
 }
 
 
 # ═══════════════════════════════════════════════════════════════════
 # DATE PARSER & EXPERIENCE CALCULATOR
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _parse_date(date_str: str):
     """
@@ -120,16 +266,16 @@ def _parse_date(date_str: str):
     Returns None if parsing fails.
     """
     formats = [
-        "%b %Y",       # Jan 2020
-        "%B %Y",       # January 2020
-        "%m/%Y",       # 01/2020
-        "%m-%Y",       # 01-2020
-        "%Y-%m",       # 2020-01
-        "%Y/%m",       # 2020/01
-        "%Y",          # 2020
-        "%b. %Y",      # Jan. 2020
-        "%d %b %Y",    # 01 Jan 2020
-        "%B %d, %Y",   # January 01, 2020
+        "%b %Y",  # Jan 2020
+        "%B %Y",  # January 2020
+        "%m/%Y",  # 01/2020
+        "%m-%Y",  # 01-2020
+        "%Y-%m",  # 2020-01
+        "%Y/%m",  # 2020/01
+        "%Y",  # 2020
+        "%b. %Y",  # Jan. 2020
+        "%d %b %Y",  # 01 Jan 2020
+        "%B %d, %Y",  # January 01, 2020
     ]
     date_str = date_str.strip().title()
     for fmt in formats:
@@ -167,21 +313,21 @@ def calculate_experience_years(experience_list: list) -> float:
 
         # Replace present/current/now/till date with today
         duration_lower = re.sub(
-            r'\b(present|current|now|till\s*date|ongoing|to\s*date)\b',
+            r"\b(present|current|now|till\s*date|ongoing|to\s*date)\b",
             today.strftime("%b %Y").lower(),
-            duration_lower
+            duration_lower,
         )
 
         # Split on dash or "to"
-        parts = re.split(r'\s*[-\u2013]+\s*|\s+to\s+', duration_lower)
+        parts = re.split(r"\s*[-\u2013]+\s*|\s+to\s+", duration_lower)
         if len(parts) < 2:
             continue
 
         start_str = parts[0].strip()
-        end_str   = parts[-1].strip()
+        end_str = parts[-1].strip()
 
         start = _parse_date(start_str)
-        end   = _parse_date(end_str)
+        end = _parse_date(end_str)
 
         if start and end and end >= start:
             months = (end.year - start.year) * 12 + (end.month - start.month)
@@ -193,6 +339,7 @@ def calculate_experience_years(experience_list: list) -> float:
 # ═══════════════════════════════════════════════════════════════════
 # LOCAL FALLBACK PARSER — no API, pure regex
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _local_parse(text: str) -> dict:
     """
@@ -209,33 +356,35 @@ def _local_parse(text: str) -> dict:
         if (
             line
             and "@" not in line
-            and not re.search(r'\d{5,}', line)
+            and not re.search(r"\d{5,}", line)
             and len(line) < 60
         ):
             words = line.split()
-            if 2 <= len(words) <= 5 and all(re.match(r'^[A-Za-z\.\-]+$', w) for w in words):
+            if 2 <= len(words) <= 5 and all(
+                re.match(r"^[A-Za-z\.\-]+$", w) for w in words
+            ):
                 name = line.title()
                 break
 
     # ── Email
-    email_m = re.search(r'[\w\.\+\-]+@[\w\.\-]+\.\w{2,}', text)
-    email   = email_m.group(0).lower() if email_m else ""
+    email_m = re.search(r"[\w\.\+\-]+@[\w\.\-]+\.\w{2,}", text)
+    email = email_m.group(0).lower() if email_m else ""
 
     # ── Phone — international formats
-    phone_m = re.search(r'(\+?\d[\d\s\-\.\(\)]{7,16}\d)', text)
-    phone   = phone_m.group(0).strip() if phone_m else ""
+    phone_m = re.search(r"(\+?\d[\d\s\-\.\(\)]{7,16}\d)", text)
+    phone = phone_m.group(0).strip() if phone_m else ""
 
     # ── LinkedIn
-    linkedin_m = re.search(r'linkedin\.com/in/[\w\-]+', text, re.IGNORECASE)
-    linkedin   = linkedin_m.group(0) if linkedin_m else ""
+    linkedin_m = re.search(r"linkedin\.com/in/[\w\-]+", text, re.IGNORECASE)
+    linkedin = linkedin_m.group(0) if linkedin_m else ""
 
     # ── GitHub
-    github_m = re.search(r'github\.com/[\w\-]+', text, re.IGNORECASE)
-    github   = github_m.group(0) if github_m else ""
+    github_m = re.search(r"github\.com/[\w\-]+", text, re.IGNORECASE)
+    github = github_m.group(0) if github_m else ""
 
     # ── Location — generic City, Country pattern
-    location  = ""
-    loc_m = re.search(r'\b([A-Z][a-zA-Z\s]+),\s*([A-Z][a-zA-Z\s]+)\b', text)
+    location = ""
+    loc_m = re.search(r"\b([A-Z][a-zA-Z\s]+),\s*([A-Z][a-zA-Z\s]+)\b", text)
     if loc_m:
         location = loc_m.group(0).strip()
 
@@ -243,59 +392,58 @@ def _local_parse(text: str) -> dict:
     text_lower = text.lower()
     skills = []
     for skill in KNOWN_SKILLS:
-        if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
+        if re.search(r"\b" + re.escape(skill) + r"\b", text_lower):
             skills.append(skill.title())
     skills = sorted(list(set(skills)))
 
     # ── Summary — first long paragraph
     summary = ""
-    for para in re.split(r'\n\s*\n', text):
+    for para in re.split(r"\n\s*\n", text):
         para = para.strip()
         if (
             len(para) > 100
             and "@" not in para
-            and not re.match(r'^[\+\d]', para)
-            and not re.match(r'^(education|experience|skills|projects)', para.lower())
+            and not re.match(r"^[\+\d]", para)
+            and not re.match(r"^(education|experience|skills|projects)", para.lower())
         ):
-            summary = re.sub(r'\s+', ' ', para)[:600]
+            summary = re.sub(r"\s+", " ", para)[:600]
             break
 
     # ── Education — universal degree patterns
-    education  = []
+    education = []
     degree_pat = re.compile(
-        r'\b(bachelor|master|b\.?tech|m\.?tech|b\.?e|m\.?e|bca|mca|'
-        r'b\.?sc|m\.?sc|b\.?com|mba|ph\.?d|doctorate|diploma|'
-        r'associate|b\.?a|m\.?a|llb|mbbs|bds|b\.?arch)\b',
-        re.IGNORECASE
+        r"\b(bachelor|master|b\.?tech|m\.?tech|b\.?e|m\.?e|bca|mca|"
+        r"b\.?sc|m\.?sc|b\.?com|mba|ph\.?d|doctorate|diploma|"
+        r"associate|b\.?a|m\.?a|llb|mbbs|bds|b\.?arch)\b",
+        re.IGNORECASE,
     )
     for line in text.split("\n"):
         if degree_pat.search(line):
-            education.append({
-                "degree":      line.strip()[:120],
-                "institution": "",
-                "year":        "",
-                "gpa":         ""
-            })
+            education.append(
+                {"degree": line.strip()[:120], "institution": "", "year": "", "gpa": ""}
+            )
             if len(education) >= 5:
                 break
 
     # ── Experience years from explicit mention in text
-    exp_m     = re.search(r'(\d+)\+?\s*years?\s*(?:of\s*)?(?:work\s*)?experience', text, re.IGNORECASE)
+    exp_m = re.search(
+        r"(\d+)\+?\s*years?\s*(?:of\s*)?(?:work\s*)?experience", text, re.IGNORECASE
+    )
     exp_years = int(exp_m.group(1)) if exp_m else 0
 
     return {
-        "name":             name,
-        "email":            email,
-        "phone":            phone,
-        "linkedin":         linkedin,
-        "github":           github,
-        "location":         location,
-        "summary":          summary,
-        "skills":           skills,
-        "experience":       [],
-        "education":        education,
-        "certifications":   [],
-        "languages":        [],
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "linkedin": linkedin,
+        "github": github,
+        "location": location,
+        "summary": summary,
+        "skills": skills,
+        "experience": [],
+        "education": education,
+        "certifications": [],
+        "languages": [],
         "experience_years": exp_years,
     }
 
@@ -303,6 +451,7 @@ def _local_parse(text: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 # GEMINI PARSER — single AI call
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _call_gemini(resume_text: str):
     """
@@ -317,7 +466,7 @@ def _call_gemini(resume_text: str):
     try:
         from google import genai
 
-        client         = genai.Client(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         resume_snippet = resume_text[:4000]
 
         prompt = f"""You are a resume parser. Parse the resume below and return ONLY a valid JSON object.
@@ -368,8 +517,7 @@ Rules:
 
         print("🤖 Calling Gemini (gemini-2.0-flash)...")
         response = client.models.generate_content(
-            model    = "gemini-2.0-flash",
-            contents = prompt
+            model="gemini-2.0-flash", contents=prompt
         )
 
         raw = response.text.strip()
@@ -385,14 +533,16 @@ Rules:
                     break
 
         # Extract JSON block if surrounded by extra text
-        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        json_match = re.search(r"\{.*\}", raw, re.DOTALL)
         if json_match:
             raw = json_match.group(0)
 
         result = json.loads(raw)
-        print(f"✅ Gemini parsed: {result.get('name', 'Unknown')} "
-              f"| {len(result.get('skills', []))} skills "
-              f"| {len(result.get('experience', []))} jobs")
+        print(
+            f"✅ Gemini parsed: {result.get('name', 'Unknown')} "
+            f"| {len(result.get('skills', []))} skills "
+            f"| {len(result.get('experience', []))} jobs"
+        )
         return result
 
     except Exception as e:
@@ -410,21 +560,22 @@ Rules:
 # NORMALIZE — guarantee all fields exist
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _normalize(data: dict) -> dict:
     """Ensure all fields exist with correct types."""
     return {
-        "name":             str(data.get("name")               or ""),
-        "email":            str(data.get("email")              or ""),
-        "phone":            str(data.get("phone")              or ""),
-        "linkedin":         str(data.get("linkedin")           or ""),
-        "github":           str(data.get("github")             or ""),
-        "location":         str(data.get("location")           or ""),
-        "summary":          str(data.get("summary")            or ""),
-        "skills":           list(data.get("skills")            or []),
-        "experience":       list(data.get("experience")        or []),
-        "education":        list(data.get("education")         or []),
-        "certifications":   list(data.get("certifications")    or []),
-        "languages":        list(data.get("languages")         or []),
+        "name": str(data.get("name") or ""),
+        "email": str(data.get("email") or ""),
+        "phone": str(data.get("phone") or ""),
+        "linkedin": str(data.get("linkedin") or ""),
+        "github": str(data.get("github") or ""),
+        "location": str(data.get("location") or ""),
+        "summary": str(data.get("summary") or ""),
+        "skills": list(data.get("skills") or []),
+        "experience": list(data.get("experience") or []),
+        "education": list(data.get("education") or []),
+        "certifications": list(data.get("certifications") or []),
+        "languages": list(data.get("languages") or []),
         "experience_years": float(data.get("experience_years") or 0),
     }
 
@@ -432,6 +583,7 @@ def _normalize(data: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 # BUILD DB DOCUMENT
 # ═══════════════════════════════════════════════════════════════════
+
 
 def build_db_document(parsed: dict) -> dict:
     """
@@ -442,11 +594,13 @@ def build_db_document(parsed: dict) -> dict:
     - Adds candidate_id UUID and parsed_at timestamp
     """
     experience_list = parsed.get("experience", [])
-    education_list  = parsed.get("education",  [])
+    education_list = parsed.get("education", [])
 
     # Recalculate experience years from actual date ranges
     calculated_years = calculate_experience_years(experience_list)
-    exp_years = calculated_years if calculated_years > 0 else parsed.get("experience_years", 0)
+    exp_years = (
+        calculated_years if calculated_years > 0 else parsed.get("experience_years", 0)
+    )
 
     # Highest qualification = first education entry
     highest_edu = education_list[0] if education_list else {}
@@ -456,39 +610,35 @@ def build_db_document(parsed: dict) -> dict:
 
     return {
         "candidate_id": str(uuid.uuid4()),
-        "parsed_at":    datetime.utcnow().isoformat(),
-
+        "parsed_at": datetime.utcnow().isoformat(),
         "personal": {
-            "name":     parsed.get("name",     ""),
-            "email":    parsed.get("email",    ""),
-            "phone":    parsed.get("phone",    ""),
+            "name": parsed.get("name", ""),
+            "email": parsed.get("email", ""),
+            "phone": parsed.get("phone", ""),
             "linkedin": parsed.get("linkedin", ""),
-            "github":   parsed.get("github",   ""),
+            "github": parsed.get("github", ""),
             "location": parsed.get("location", ""),
         },
-
-        "summary":          parsed.get("summary", ""),
+        "summary": parsed.get("summary", ""),
         "experience_years": exp_years,
-        "experience":       experience_list,
-
+        "experience": experience_list,
         "skills": all_skills,
-
         "qualification": {
-            "highest_degree": highest_edu.get("degree",      ""),
-            "institution":    highest_edu.get("institution", ""),
-            "year":           highest_edu.get("year",        ""),
-            "gpa":            highest_edu.get("gpa",         ""),
-            "all_education":  education_list,
+            "highest_degree": highest_edu.get("degree", ""),
+            "institution": highest_edu.get("institution", ""),
+            "year": highest_edu.get("year", ""),
+            "gpa": highest_edu.get("gpa", ""),
+            "all_education": education_list,
         },
-
         "certifications": parsed.get("certifications", []),
-        "languages":      parsed.get("languages",      []),
+        "languages": parsed.get("languages", []),
     }
 
 
 # ═══════════════════════════════════════════════════════════════════
 # STORE TO DB — MongoDB
 # ═══════════════════════════════════════════════════════════════════
+
 
 def store_to_db(parsed: dict, db_collection) -> dict:
     """
@@ -511,9 +661,11 @@ def store_to_db(parsed: dict, db_collection) -> dict:
 
     try:
         db_collection.insert_one(document)
-        print(f"✅ Stored: {document['personal']['name']} "
-              f"| {document['experience_years']} yrs exp "
-              f"| {len(document['skills'])} skills")
+        print(
+            f"✅ Stored: {document['personal']['name']} "
+            f"| {document['experience_years']} yrs exp "
+            f"| {len(document['skills'])} skills"
+        )
     except Exception as e:
         print(f"❌ DB insert failed: {e}")
 
@@ -523,6 +675,7 @@ def store_to_db(parsed: dict, db_collection) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 # MAIN PARSE FUNCTION
 # ═══════════════════════════════════════════════════════════════════
+
 
 def parse_resume(resume_text: str) -> dict:
     """
@@ -550,7 +703,7 @@ def parse_resume(resume_text: str) -> dict:
         return _normalize({})
 
     # Step 1 — Check cache
-    cache     = _get_cache()
+    cache = _get_cache()
     text_hash = _hash_text(resume_text)
 
     if text_hash in cache:
@@ -578,5 +731,3 @@ def parse_resume(resume_text: str) -> dict:
     print(f"💾 Cached (hash: {text_hash[:8]}...)")
 
     return result
-
-

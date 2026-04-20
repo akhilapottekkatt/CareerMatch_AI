@@ -23,7 +23,6 @@
             <nav class="cm-nav" aria-label="Main">
                 <a href="/dashboard" class="cm-nav-link{% if active_nav == 'dashboard' %} cm-nav-link-active{% endif %}">Dashboard</a>
                 <a href="/suggestions" class="cm-nav-link{% if active_nav == 'suggestions' %} cm-nav-link-active{% endif %}">Suggestions</a>
-                <a href="/applied" class="cm-nav-link{% if active_nav == 'applied' %} cm-nav-link-active{% endif %}">Applied Jobs</a>
                 <a href="/profile" class="cm-nav-link{% if active_nav == 'profile' %} cm-nav-link-active{% endif %}">Profile</a>
                 {% if is_admin %}
                 <a href="/admin" class="cm-nav-link cm-nav-link-admin{% if active_nav in ['admin', 'admin_users', 'admin_jobs'] %} cm-nav-link-active{% endif %}">Admin</a>
@@ -35,6 +34,20 @@
     </header>
 
     {% block content %}{% endblock %}
+
+    <footer class="cm-footer">
+        <div class="cm-footer-inner">
+            <div class="cm-footer-brand">
+                <div class="cm-footer-logo">CareerMatch AI</div>
+                <div class="cm-footer-copy">© 2026 CareerMatch AI. All rights reserved.</div>
+            </div>
+            <nav class="cm-footer-links" aria-label="Footer">
+                <a href="/dashboard">Dashboard</a>
+                <a href="/suggestions">Suggestions</a>
+                <a href="/profile">Profile</a>
+            </nav>
+        </div>
+    </footer>
 
     {% block scripts %}{% endblock %}
 </body>

@@ -82,4 +82,3 @@ def send_best_jobs_email(
         # In a real system, you would log this exception.
         print("Error sending best jobs email:", exc)
         return False
-

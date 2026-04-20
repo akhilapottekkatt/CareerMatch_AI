@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}CareerMatch AI · Profile{% endblock %}
+{% block body_class %}ui-light{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/css/profile.css" />
 {% endblock %}
@@ -11,7 +12,8 @@
     <div class="profile-pending-banner" id="profilePendingBanner">
         <div class="profile-pending-inner">
             <p class="profile-pending-text">
-                <strong>Resume parsed.</strong> Review and edit your details below, then confirm to run job matching.
+                <strong>Resume parsed.</strong> Review and edit your details below. Add at least one
+                <strong>expected job role</strong> (card below), then confirm to run job matching.
             </p>
             <label class="profile-pending-label" for="pendingSummary">Professional summary</label>
             <textarea id="pendingSummary" class="profile-pending-textarea" rows="3" placeholder="Summary from your resume">{{ p.summary or '' }}</textarea>
@@ -21,42 +23,35 @@
     </div>
     {% endif %}
 
-    <div class="profile-header">
-        <div class="avatar-wrap">
-            {% if profile and profile.profile_pic %}
-                <img src="{{ profile.profile_pic }}" alt="Profile" class="avatar-img" id="avatarImg">
-            {% else %}
-                <div class="avatar-placeholder" id="avatarPlaceholder">
-                    {{ user.username[0].upper() }}
-                </div>
-            {% endif %}
-            <button type="button" class="avatar-edit-btn" onclick="document.getElementById('picInput').click()" title="Change photo">✏️</button>
-            <input type="file" id="picInput" accept="image/*" hidden onchange="uploadPic(this)">
-        </div>
-
-        <div class="profile-meta">
-            <div class="profile-name">{{ user.username }}</div>
+    <div class="profile-grid">
+        <div class="p-card profile-overview-card">
+            <div class="avatar-wrap avatar-wrap-center">
+                {% if profile and profile.profile_pic %}
+                    <img src="{{ profile.profile_pic }}" alt="Profile" class="avatar-img" id="avatarImg">
+                {% else %}
+                    <div class="avatar-placeholder" id="avatarPlaceholder">
+                        {{ user.name[0].upper() }}
+                    </div>
+                {% endif %}
+                <button type="button" class="avatar-edit-btn" onclick="document.getElementById('picInput').click()" title="Change photo">✏️</button>
+                <input type="file" id="picInput" accept="image/*" hidden onchange="uploadPic(this)">
+                <span class="match-pill">Profile</span>
+            </div>
+            <div class="profile-name">{{ user.name }}</div>
             <div class="profile-email">{{ user.email }}</div>
-            <div class="profile-badges">
-                {% if profile and profile.experience_years %}
-                    <span class="badge badge-blue">{{ profile.experience_years }} yrs exp</span>
-                {% endif %}
-                {% if profile and profile.preferred_location %}
-                    <span class="badge badge-violet">{{ profile.preferred_location }}</span>
-                {% endif %}
-                {% if profile and profile.job_type %}
-                    <span class="badge badge-peach">{{ profile.job_type }}</span>
-                {% endif %}
-                {% if skills %}
-                    <span class="badge badge-blue">{{ skills | length }} skills</span>
-                {% endif %}
+            <div class="mini-stats">
+                <div>
+                    <div class="mini-label">Skills</div>
+                    <div class="mini-value">{{ skills | length }}</div>
+                </div>
+                <div>
+                    <div class="mini-label">Exp.</div>
+                    <div class="mini-value">{{ profile.experience_years if profile and profile.experience_years else 0 }}yr</div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="profile-grid">
-
-        <div class="p-card">
+        <div class="p-card basic-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">👤</div>
                 Basic Info
@@ -65,7 +60,7 @@
                 <div class="field-group">
                     <div class="field">
                         <label>Full Name</label>
-                        <input type="text" name="name" value="{% if p and p.name %}{{ p.name }}{% else %}{{ user.username }}{% endif %}" required>
+                        <input type="text" name="name" value="{% if p and p.name %}{{ p.name }}{% else %}{{ user.name }}{% endif %}" required>
                     </div>
                     <div class="field">
                         <label>Email</label>
@@ -103,7 +98,7 @@
             </form>
         </div>
 
-        <div class="p-card">
+        <div class="p-card qualifications-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">🎓</div>
                 Qualifications
@@ -131,10 +126,19 @@
             <p class="profile-hint">Auto-filled from your resume where possible. Save basic info to persist.</p>
         </div>
 
-        <div class="p-card">
+        <div class="p-card summary-card">
+            <div class="p-card-title">
+                <div class="p-card-title-icon">✨</div>
+                Professional Summary
+            </div>
+            <textarea class="summary-box" placeholder="Add your professional summary to refine job matching." readonly>{% if p and p.summary %}{{ p.summary }}{% else %}{{ profile.summary if profile and profile.summary else '' }}{% endif %}</textarea>
+            <p class="profile-hint">Summary is extracted from resume during parsing/confirmation.</p>
+        </div>
+
+        <div class="p-card aspirations-card span-2">
             <div class="p-card-title">
                 <div class="p-card-title-icon">🎯</div>
-                Job Preferences
+                Career Aspirations
             </div>
             <div class="field-group">
                 <div class="field">
@@ -166,13 +170,11 @@
                            oninput="document.getElementById('h_salary').value=this.value">
                 </div>
             </div>
-            <p class="profile-hint">These preferences help filter suggestions. Use Save Changes in Basic Info to apply.</p>
-        </div>
-
-        <div class="p-card">
-            <div class="p-card-title">
-                <div class="p-card-title-icon">💼</div>
-                Expected Job Roles
+            <div class="roles-section">
+                <label class="roles-label">Expected Job Roles (required)</label>
+                <p class="profile-hint" style="margin-top:0;">
+                    Job search uses only these titles (no skill-combination queries).
+                </p>
             </div>
             <div class="roles-wrap" id="rolesWrap">
                 {% for role in expected_roles %}
@@ -181,7 +183,7 @@
                     </span>
                 {% endfor %}
                 {% if not expected_roles %}
-                    <p class="profile-hint" style="margin:0;">No roles added yet.</p>
+                    <p class="profile-hint" style="margin:0;">Add at least one role to enable job matching.</p>
                 {% endif %}
             </div>
             <div class="skill-add-row">
@@ -192,7 +194,7 @@
             <button type="button" class="btn-save" onclick="saveRoles()" style="margin-top:1rem;">Save Roles</button>
         </div>
 
-        <div class="p-card span-2">
+        <div class="p-card span-2 skills-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">⚡</div>
                 Skills
@@ -216,7 +218,7 @@
             <button type="button" class="btn-save" onclick="saveSkills()" style="margin-top:1rem;">Save Skills</button>
         </div>
 
-        <div class="p-card span-2">
+        <div class="p-card resumes-card">
             <div class="p-card-title">
                 <div class="p-card-title-icon">📄</div>
                 My Resumes
@@ -280,6 +282,11 @@
         </div>
 
     </div>
+
+    <div class="profile-actions-bar">
+        <button type="button" class="btn-ghost" onclick="location.reload()">Discard Changes</button>
+        <button type="button" class="btn-save" onclick="document.getElementById('basicForm').requestSubmit()">Save Profile</button>
+    </div>
 </main>
 
 <div class="modal-overlay" id="uploadModal">
@@ -316,6 +323,10 @@ async function confirmPendingResume() {
         showToast('Nothing to confirm.', 'error');
         return;
     }
+    if (!roles || roles.length === 0) {
+        showToast('Add at least one expected job role, click Save Roles, then confirm.', 'error');
+        return;
+    }
     const form = document.getElementById('basicForm');
     if (!form) return;
 
@@ -347,7 +358,8 @@ async function confirmPendingResume() {
                 institution: document.getElementById('f_inst').value.trim(),
                 graduation_year: document.getElementById('f_grad').value.trim(),
                 summary: summary,
-                skills: skills
+                skills: skills,
+                expected_roles: roles
             })
         });
         const data = await resp.json().catch(() => ({}));
@@ -447,15 +459,22 @@ function removeRole(el, name) {
 }
 
 async function saveRoles() {
+    if (!roles || roles.length === 0) {
+        showToast('Add at least one expected job role before saving.', 'error');
+        return;
+    }
     try {
         const resp = await fetch('/profile/update_roles', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ roles })
         });
-        const data = await resp.json();
-        if (data.success) showToast('Roles saved!');
-        else showToast('Failed to save roles', 'error');
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok && data.success) {
+            showToast('Roles saved!');
+        } else {
+            showToast(data.error || 'Failed to save roles', 'error');
+        }
     } catch(e) {
         showToast('Error saving roles', 'error');
     }

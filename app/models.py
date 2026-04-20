@@ -9,34 +9,54 @@ import glob
 import json
 import os
 from datetime import datetime
-from database import get_connection
+from app.database import get_connection
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPER
 # ═══════════════════════════════════════════════════════════════════
 
-def create_user(email: str, password: str, username: str = "") -> int:
+
+def create_user(email: str, password: str, name: str = "") -> int:
     """
     Create a new user and return user_id
     """
-    from auth import hash_password
+    from app.auth import hash_password
 
     conn = get_connection()
     try:
-        cursor = conn.execute("""
-            INSERT INTO users (email, password, username, created_at)
-            VALUES (?, ?, ?, datetime('now'))
-        """, (
-            email.lower().strip(),
-            hash_password(password),
-            username or email.split("@")[0]   # default username
-        ))
+        final_name = name or email.split("@")[0]
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+
+        # Backward compatibility: older DBs still have NOT NULL users.username.
+        if "username" in cols:
+            cursor = conn.execute(
+                """
+                INSERT INTO users (email, password, name, username, created_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+            """,
+                (
+                    email.lower().strip(),
+                    hash_password(password),
+                    final_name,
+                    final_name,
+                ),
+            )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO users (email, password, name, created_at)
+                VALUES (?, ?, ?, datetime('now'))
+            """,
+                (
+                    email.lower().strip(),
+                    hash_password(password),
+                    final_name,
+                ),
+            )
         conn.commit()
         return cursor.lastrowid
     finally:
         conn.close()
-
-
 
 
 def _row(row) -> dict:
@@ -48,27 +68,23 @@ def user_exists(email: str) -> bool:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT 1 FROM users WHERE email = ?",
-            (email.lower().strip(),)
+            "SELECT 1 FROM users WHERE email = ?", (email.lower().strip(),)
         ).fetchone()
         return row is not None
     finally:
         conn.close()
 
 
-
-
-
 # ═══════════════════════════════════════════════════════════════════
 # USER
 # ═══════════════════════════════════════════════════════════════════
+
 
 def get_user_by_email(email: str) -> dict:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT * FROM users WHERE email = ?",
-            (email.lower().strip(),)
+            "SELECT * FROM users WHERE email = ?", (email.lower().strip(),)
         ).fetchone()
         return _row(row)
     finally:
@@ -78,9 +94,7 @@ def get_user_by_email(email: str) -> dict:
 def get_user_by_id(user_id: int) -> dict:
     conn = get_connection()
     try:
-        row = conn.execute(
-            "SELECT * FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return _row(row)
     finally:
         conn.close()
@@ -91,7 +105,7 @@ def list_users_admin() -> list:
     conn = get_connection()
     try:
         rows = conn.execute(
-            """SELECT id, username, email, created_at, IFNULL(is_admin, 0) AS is_admin
+            """SELECT id, name, email, created_at, IFNULL(is_admin, 0) AS is_admin
                FROM users ORDER BY id ASC"""
         ).fetchall()
         return [_row(r) for r in rows]
@@ -162,8 +176,12 @@ def admin_stats() -> dict:
     conn = get_connection()
     try:
         n_users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
-        n_suggestions = conn.execute("SELECT COUNT(*) AS c FROM job_suggestions").fetchone()["c"]
-        n_applied = conn.execute("SELECT COUNT(*) AS c FROM applied_jobs").fetchone()["c"]
+        n_suggestions = conn.execute(
+            "SELECT COUNT(*) AS c FROM job_suggestions"
+        ).fetchone()["c"]
+        n_applied = conn.execute("SELECT COUNT(*) AS c FROM applied_jobs").fetchone()[
+            "c"
+        ]
         n_resumes = conn.execute("SELECT COUNT(*) AS c FROM resumes").fetchone()["c"]
         return {
             "users": n_users,
@@ -185,7 +203,7 @@ def admin_list_job_suggestions(
         if user_id is not None:
             rows = conn.execute(
                 """
-                SELECT js.*, u.email AS user_email, u.username AS user_username
+                SELECT js.*, u.email AS user_email, u.name AS user_name
                 FROM job_suggestions js
                 JOIN users u ON u.id = js.user_id
                 WHERE js.user_id = ?
@@ -197,7 +215,7 @@ def admin_list_job_suggestions(
         else:
             rows = conn.execute(
                 """
-                SELECT js.*, u.email AS user_email, u.username AS user_username
+                SELECT js.*, u.email AS user_email, u.name AS user_name
                 FROM job_suggestions js
                 JOIN users u ON u.id = js.user_id
                 ORDER BY js.date_suggested DESC
@@ -238,12 +256,10 @@ def admin_delete_job_suggestion(suggestion_id: int) -> bool:
 
 
 def update_username(user_id: int, username: str):
+    # Backward-compatible wrapper used by existing callers.
     conn = get_connection()
     try:
-        conn.execute(
-            "UPDATE users SET username = ? WHERE id = ?",
-            (username, user_id)
-        )
+        conn.execute("UPDATE users SET name = ? WHERE id = ?", (username, user_id))
         conn.commit()
     finally:
         conn.close()
@@ -252,6 +268,7 @@ def update_username(user_id: int, username: str):
 # ═══════════════════════════════════════════════════════════════════
 # USER PROFILE
 # ═══════════════════════════════════════════════════════════════════
+
 
 def get_or_create_profile(user_id: int) -> dict:
     conn = get_connection()
@@ -262,9 +279,7 @@ def get_or_create_profile(user_id: int) -> dict:
         if row:
             return _row(row)
         # Create empty profile if not exists
-        conn.execute(
-            "INSERT INTO user_profiles (user_id) VALUES (?)", (user_id,)
-        )
+        conn.execute("INSERT INTO user_profiles (user_id) VALUES (?)", (user_id,))
         conn.commit()
         row = conn.execute(
             "SELECT * FROM user_profiles WHERE user_id = ?", (user_id,)
@@ -283,12 +298,12 @@ def update_profile(user_id: int, fields: dict):
     if not fields:
         return
     set_clause = ", ".join(f"{k} = ?" for k in fields)
-    values     = list(fields.values()) + [user_id]
+    values = list(fields.values()) + [user_id]
     conn = get_connection()
     try:
         conn.execute(
             f"UPDATE user_profiles SET {set_clause}, updated_at = datetime('now') WHERE user_id = ?",
-            values
+            values,
         )
         conn.commit()
     finally:
@@ -299,12 +314,13 @@ def update_profile(user_id: int, fields: dict):
 # RESUME
 # ═══════════════════════════════════════════════════════════════════
 
+
 def get_latest_resume(user_id: int) -> dict:
     conn = get_connection()
     try:
         row = conn.execute(
             "SELECT * FROM resumes WHERE user_id = ? ORDER BY id DESC LIMIT 1",
-            (user_id,)
+            (user_id,),
         ).fetchone()
         return _row(row)
     finally:
@@ -328,8 +344,16 @@ def get_pending_resume(user_id: int) -> dict:
 def update_resume_record(resume_id: int, user_id: int, fields: dict) -> bool:
     """Update resume columns; only allowed keys. Returns True if a row was updated."""
     allowed = {
-        "label", "role", "summary", "experience", "highest_degree", "institution",
-        "graduation_year", "experience_years", "profile_confirmed", "is_active",
+        "label",
+        "role",
+        "summary",
+        "experience",
+        "highest_degree",
+        "institution",
+        "graduation_year",
+        "experience_years",
+        "profile_confirmed",
+        "is_active",
     }
     safe = {k: v for k, v in fields.items() if k in allowed}
     if not safe:
@@ -350,8 +374,7 @@ def get_resume_by_id(resume_id: int, user_id: int) -> dict:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT * FROM resumes WHERE id = ? AND user_id = ?",
-            (resume_id, user_id)
+            "SELECT * FROM resumes WHERE id = ? AND user_id = ?", (resume_id, user_id)
         ).fetchone()
         return _row(row)
     finally:
@@ -362,8 +385,7 @@ def get_all_resumes(user_id: int) -> list:
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT * FROM resumes WHERE user_id = ? ORDER BY id DESC",
-            (user_id,)
+            "SELECT * FROM resumes WHERE user_id = ? ORDER BY id DESC", (user_id,)
         ).fetchall()
         return [_row(r) for r in rows]
     finally:
@@ -374,25 +396,28 @@ def insert_resume(user_id: int, data: dict) -> int:
     """Insert new resume. Returns new resume id."""
     conn = get_connection()
     try:
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             INSERT INTO resumes
                 (user_id, file_path, label, role, summary, experience,
                  is_active, highest_degree, institution, graduation_year, experience_years,
                  profile_confirmed)
             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            data.get("file_path",        ""),
-            data.get("label",            ""),
-            data.get("role",             ""),
-            data.get("summary",          ""),
-            data.get("experience",       "[]"),
-            data.get("highest_degree",   ""),
-            data.get("institution",      ""),
-            data.get("graduation_year",  ""),
-            data.get("experience_years", 0.0),
-            int(data.get("profile_confirmed", 0)),
-        ))
+        """,
+            (
+                user_id,
+                data.get("file_path", ""),
+                data.get("label", ""),
+                data.get("role", ""),
+                data.get("summary", ""),
+                data.get("experience", "[]"),
+                data.get("highest_degree", ""),
+                data.get("institution", ""),
+                data.get("graduation_year", ""),
+                data.get("experience_years", 0.0),
+                int(data.get("profile_confirmed", 0)),
+            ),
+        )
         conn.commit()
         return cursor.lastrowid
     finally:
@@ -402,9 +427,7 @@ def insert_resume(user_id: int, data: dict) -> int:
 def deactivate_all_resumes(user_id: int):
     conn = get_connection()
     try:
-        conn.execute(
-            "UPDATE resumes SET is_active = 0 WHERE user_id = ?", (user_id,)
-        )
+        conn.execute("UPDATE resumes SET is_active = 0 WHERE user_id = ?", (user_id,))
         conn.commit()
     finally:
         conn.close()
@@ -413,12 +436,10 @@ def deactivate_all_resumes(user_id: int):
 def set_active_resume(resume_id: int, user_id: int):
     conn = get_connection()
     try:
-        conn.execute(
-            "UPDATE resumes SET is_active = 0 WHERE user_id = ?", (user_id,)
-        )
+        conn.execute("UPDATE resumes SET is_active = 0 WHERE user_id = ?", (user_id,))
         conn.execute(
             "UPDATE resumes SET is_active = 1 WHERE id = ? AND user_id = ?",
-            (resume_id, user_id)
+            (resume_id, user_id),
         )
         conn.commit()
     finally:
@@ -429,8 +450,7 @@ def delete_resume(resume_id: int, user_id: int):
     conn = get_connection()
     try:
         conn.execute(
-            "DELETE FROM resumes WHERE id = ? AND user_id = ?",
-            (resume_id, user_id)
+            "DELETE FROM resumes WHERE id = ? AND user_id = ?", (resume_id, user_id)
         )
         conn.commit()
     finally:
@@ -451,7 +471,7 @@ def rename_resume(resume_id: int, user_id: int, label: str):
     try:
         conn.execute(
             "UPDATE resumes SET label = ? WHERE id = ? AND user_id = ?",
-            (label, resume_id, user_id)
+            (label, resume_id, user_id),
         )
         conn.commit()
     finally:
@@ -461,8 +481,6 @@ def rename_resume(resume_id: int, user_id: int, label: str):
 # ═══════════════════════════════════════════════════════════════════
 # SKILLS  (resume ↔ skills association table — kept from original)
 # ═══════════════════════════════════════════════════════════════════
-
-
 
 
 # def link_skills_to_resume(resume_id: int, skill_names: list):
@@ -520,8 +538,84 @@ def rename_resume(resume_id: int, user_id: int, label: str):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# GLOBAL JOBS CATALOG (scheduler fetch step)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def replace_jobs_catalog(jobs: list) -> int:
+    """
+    Replace the entire ``jobs`` table with a fresh fetch (one global pool per run).
+    Returns number of rows inserted.
+    """
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM jobs")
+        inserted = 0
+        for job in jobs:
+            apply_url = (job.get("apply_url") or "").strip()
+            if not apply_url:
+                continue
+            conn.execute(
+                """
+                INSERT INTO jobs (
+                    title, company, platform, apply_url, location,
+                    description, salary, job_type, posted, fetched_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    job.get("title", "") or "",
+                    job.get("company", "") or "",
+                    job.get("platform", "") or "",
+                    apply_url,
+                    job.get("location", "") or "",
+                    job.get("description", "") or "",
+                    job.get("salary", "") or "",
+                    job.get("job_type", "") or "",
+                    job.get("posted", "") or "",
+                ),
+            )
+            inserted += 1
+        conn.commit()
+        return inserted
+    finally:
+        conn.close()
+
+
+def list_jobs_catalog_for_matching() -> list:
+    """
+    Load all rows from ``jobs`` in the shape expected by ``match_jobs_batch_users``.
+    """
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT title, company, platform, apply_url, location,
+                   description, salary, job_type, posted
+            FROM jobs
+            """).fetchall()
+        out: list = []
+        for r in rows:
+            d = dict(r)
+            d["match_score"] = 0.0
+            out.append(d)
+        return out
+    finally:
+        conn.close()
+
+
+def count_jobs_catalog() -> int:
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()
+        return int(row["c"]) if row else 0
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
 # JOB SUGGESTIONS
 # ═══════════════════════════════════════════════════════════════════
+
 
 def insert_job_suggestions(user_id: int, jobs: list):
     conn = get_connection()
@@ -534,25 +628,28 @@ def insert_job_suggestions(user_id: int, jobs: list):
             # ✅ Check duplicate
             exists = conn.execute(
                 "SELECT 1 FROM job_suggestions WHERE user_id = ? AND apply_url = ?",
-                (user_id, apply_url)
+                (user_id, apply_url),
             ).fetchone()
 
             if exists:
                 continue  # skip duplicate job
 
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO job_suggestions
                     (user_id, title, company, platform, apply_url,
                      match_score, date_suggested, is_applied)
                 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 0)
-            """, (
-                user_id,
-                job.get("title", ""),
-                job.get("company", ""),
-                job.get("platform", ""),
-                apply_url,
-                job.get("match_score", 0.0),
-            ))
+            """,
+                (
+                    user_id,
+                    job.get("title", ""),
+                    job.get("company", ""),
+                    job.get("platform", ""),
+                    apply_url,
+                    job.get("match_score", 0.0),
+                ),
+            )
 
         conn.commit()
     finally:
@@ -564,7 +661,7 @@ def delete_unapplied_suggestions(user_id: int):
     try:
         conn.execute(
             "DELETE FROM job_suggestions WHERE user_id = ? AND is_applied = 0",
-            (user_id,)
+            (user_id,),
         )
         conn.commit()
     finally:
@@ -574,12 +671,32 @@ def delete_unapplied_suggestions(user_id: int):
 def get_suggestions(user_id: int) -> list:
     conn = get_connection()
     try:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT * FROM job_suggestions
             WHERE user_id = ? AND is_applied = 0
             ORDER BY match_score DESC
             LIMIT 100
-        """, (user_id,)).fetchall()
+        """,
+            (user_id,),
+        ).fetchall()
+        return [_row(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_all_suggestions(user_id: int) -> list:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM job_suggestions
+            WHERE user_id = ?
+            ORDER BY date_suggested DESC, match_score DESC
+            LIMIT 300
+        """,
+            (user_id,),
+        ).fetchall()
         return [_row(r) for r in rows]
     finally:
         conn.close()
@@ -590,7 +707,7 @@ def get_suggestion_by_id(job_id: int, user_id: int) -> dict:
     try:
         row = conn.execute(
             "SELECT * FROM job_suggestions WHERE id = ? AND user_id = ?",
-            (job_id, user_id)
+            (job_id, user_id),
         ).fetchone()
         return _row(row)
     finally:
@@ -602,7 +719,7 @@ def mark_suggestion_applied(job_id: int, user_id: int):
     try:
         conn.execute(
             "UPDATE job_suggestions SET is_applied = 1 WHERE id = ? AND user_id = ?",
-            (job_id, user_id)
+            (job_id, user_id),
         )
         conn.commit()
     finally:
@@ -613,12 +730,13 @@ def mark_suggestion_applied(job_id: int, user_id: int):
 # APPLIED JOBS
 # ═══════════════════════════════════════════════════════════════════
 
+
 def already_applied(user_id: int, apply_url: str) -> bool:
     conn = get_connection()
     try:
         row = conn.execute(
             "SELECT id FROM applied_jobs WHERE user_id = ? AND apply_url = ?",
-            (user_id, apply_url)
+            (user_id, apply_url),
         ).fetchone()
         return row is not None
     finally:
@@ -639,19 +757,22 @@ def get_applied_urls(user_id: int) -> set:
 def insert_applied_job(user_id: int, job: dict):
     conn = get_connection()
     try:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO applied_jobs
                 (user_id, title, company, platform, apply_url,
                  match_score, applied_at, status)
             VALUES (?, ?, ?, ?, ?, ?, datetime('now'), 'applied')
-        """, (
-            user_id,
-            job.get("title",       ""),
-            job.get("company",     ""),
-            job.get("platform",    ""),
-            job.get("apply_url",   ""),
-            job.get("match_score", 0.0),
-        ))
+        """,
+            (
+                user_id,
+                job.get("title", ""),
+                job.get("company", ""),
+                job.get("platform", ""),
+                job.get("apply_url", ""),
+                job.get("match_score", 0.0),
+            ),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -660,11 +781,14 @@ def insert_applied_job(user_id: int, job: dict):
 def get_applied_jobs(user_id: int) -> list:
     conn = get_connection()
     try:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT * FROM applied_jobs
             WHERE user_id = ?
             ORDER BY applied_at DESC
-        """, (user_id,)).fetchall()
+        """,
+            (user_id,),
+        ).fetchall()
         return [_row(r) for r in rows]
     finally:
         conn.close()
@@ -678,13 +802,14 @@ def get_applied_jobs(user_id: int) -> list:
 #   FIX 3 — returns top 50 above threshold (original returned only top 5)
 # ═══════════════════════════════════════════════════════════════════
 
-_sentence_model = None   # lazy — not loaded until first match call
+_sentence_model = None  # lazy — not loaded until first match call
 
 
 def _get_model():
     global _sentence_model
     if _sentence_model is None:
         from sentence_transformers import SentenceTransformer
+
         print("🤖 Loading SentenceTransformer (all-MiniLM-L6-v2)...")
         _sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
         print("✅ Model ready")
@@ -717,31 +842,37 @@ def match_jobs_to_resume(resume_text: str, jobs: list, threshold: float = 0.2) -
     if not resume_text or not jobs:
         return []
 
-    model      = _get_model()
+    model = _get_model()
     resume_emb = model.encode(resume_text)
-    results    = []
+    results = []
 
     for job in jobs:
         job_text = (
-            job.get("title",       "") + " " +
-            job.get("description", "") + " " +
-            job.get("company",     "")
+            job.get("title", "")
+            + " "
+            + job.get("description", "")
+            + " "
+            + job.get("company", "")
         )
         job_emb = model.encode(job_text)
-        score   = float(cosine_similarity([resume_emb], [job_emb])[0][0])
+        score = float(cosine_similarity([resume_emb], [job_emb])[0][0])
 
         if score >= threshold:
-            results.append({
-                **job,
-                "match_score": round(score, 3),
-                "match_pct":   f"{score:.0%}",
-            })
+            results.append(
+                {
+                    **job,
+                    "match_score": round(score, 3),
+                    "match_pct": f"{score:.0%}",
+                }
+            )
 
     results.sort(key=lambda x: x["match_score"], reverse=True)
 
     print(f"✅ BERT matched {len(results)} jobs (threshold={threshold})")
     if results:
-        print(f"🏆 Top: {results[0].get('title')} @ {results[0].get('company')} — {results[0].get('match_pct')}")
+        print(
+            f"🏆 Top: {results[0].get('title')} @ {results[0].get('company')} — {results[0].get('match_pct')}"
+        )
 
     return results
 
@@ -795,11 +926,13 @@ def match_jobs_batch_users(
         picked: list = []
         for j, score in enumerate(row):
             if float(score) >= threshold:
-                picked.append({
-                    **jobs[j],
-                    "match_score": round(float(score), 3),
-                    "match_pct":   f"{float(score):.0%}",
-                })
+                picked.append(
+                    {
+                        **jobs[j],
+                        "match_score": round(float(score), 3),
+                        "match_pct": f"{float(score):.0%}",
+                    }
+                )
         picked.sort(key=lambda x: x["match_score"], reverse=True)
         out[uid] = picked[:top_k]
 
@@ -808,4 +941,3 @@ def match_jobs_batch_users(
         f"(threshold={threshold}, top_k={top_k} per user)"
     )
     return out
-

@@ -1,34 +1,221 @@
 {% extends "base.html" %}
 {% block title %}CareerMatch AI · Register{% endblock %}
-{% block content %}
-<main id="main-content" class="cm-main">
-    <section class="cm-shell">
-        <aside class="cm-panel cm-panel-info">
-            <h1 class="cm-title">Create your account</h1>
-            <p class="cm-subtitle">
-                Join CareerMatch AI and start receiving smart job matches based on your resume.
-            </p>
-            <ul class="cm-features">
-                <li>Upload your resume once — we extract skills automatically</li>
-                <li>Ranked matches across LinkedIn, Indeed, Naukri, and more</li>
-                <li>Daily summaries and tailored suggestions</li>
-                <li>Track where you have applied</li>
-            </ul>
-        </aside>
+{% block body_class %}ui-light{% endblock %}
+{% block extra_css %}
+<style>
+.register-main {
+    background: #f4f5fc;
+    min-height: calc(100vh - 60px);
+    padding: 1.35rem 1rem 2rem;
+}
 
-        <section class="cm-panel cm-panel-form">
+.register-shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.register-hero,
+.register-card {
+    background: #fff;
+    border: 1px solid #e6e8f3;
+    border-radius: 24px;
+    padding: 1.35rem;
+}
+
+.register-pill {
+    display: inline-flex;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4a5b95;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.72rem;
+}
+
+.register-title {
+    margin: 0.8rem 0 0.45rem;
+    color: #151b2c;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+}
+
+.register-sub {
+    margin: 0;
+    color: #5f6780;
+    font-size: 1rem;
+    line-height: 1.55;
+    max-width: 35ch;
+}
+
+.register-points {
+    margin-top: 1.25rem;
+    display: grid;
+    gap: 0.85rem;
+}
+
+.register-point {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 0.6rem;
+    align-items: start;
+}
+
+.register-point .icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: #f0f3ff;
+    color: #2f50da;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.register-point h4 {
+    margin: 0 0 0.15rem;
+    color: #20273a;
+    font-size: 1rem;
+}
+
+.register-point p {
+    margin: 0;
+    color: #65708b;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.register-art {
+    margin-top: 1rem;
+    min-height: 150px;
+    border-radius: 18px;
+    background:
+        radial-gradient(ellipse 60% 40% at 25% 20%, rgba(59, 130, 246, 0.35), transparent 65%),
+        radial-gradient(ellipse 50% 35% at 80% 70%, rgba(79, 70, 229, 0.35), transparent 68%),
+        linear-gradient(155deg, #1f2f4c, #101a31);
+}
+
+.register-card h1 {
+    margin: 0;
+    color: #161d2f;
+    font-size: 1.8rem;
+}
+
+.register-card p {
+    margin: 0.35rem 0 1.05rem;
+    color: #6a738d;
+}
+
+.register-card .cm-label {
+    color: #65708a;
+    font-size: 0.72rem;
+}
+
+.register-card .cm-input {
+    background: #f7f8fe;
+    border-color: #d8ddef;
+    color: #20283a;
+}
+
+.register-card .cm-input:focus {
+    border-color: #3a5ce6;
+    box-shadow: 0 0 0 3px rgba(58, 92, 230, 0.14);
+}
+
+.register-submit {
+    width: 100%;
+    border-radius: 999px;
+    padding: 0.78rem 1rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #1f4fee, #2345cc);
+    color: #fff;
+    border: 0;
+    cursor: pointer;
+}
+
+.register-alt {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.register-alt .cm-hint {
+    margin: 0;
+    color: #69728a;
+}
+
+.register-alt a {
+    color: #2448ca;
+    font-weight: 700;
+}
+
+@media (max-width: 920px) {
+    .register-shell {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+{% block content %}
+<main id="main-content" class="register-main">
+    <section class="register-shell">
+        <article class="register-hero">
+            <span class="register-pill">AI-powered curation</span>
+            <h2 class="register-title">Create account</h2>
+            <p class="register-sub">
+                Join CareerMatch AI and start receiving role-focused opportunities tailored to your resume.
+            </p>
+            <div class="register-points">
+                <article class="register-point">
+                    <span class="icon">⚡</span>
+                    <div>
+                        <h4>Smart parsing</h4>
+                        <p>Upload once and we extract the data needed to build targeted matching.</p>
+                    </div>
+                </article>
+                <article class="register-point">
+                    <span class="icon">🎯</span>
+                    <div>
+                        <h4>Role-aligned recommendations</h4>
+                        <p>Expected roles and profile preferences drive cleaner, relevant job discovery.</p>
+                    </div>
+                </article>
+                <article class="register-point">
+                    <span class="icon">🔒</span>
+                    <div>
+                        <h4>Private and secure</h4>
+                        <p>Your profile and resume data stay protected and under your control.</p>
+                    </div>
+                </article>
+            </div>
+            <div class="register-art" aria-hidden="true"></div>
+        </article>
+
+        <section class="register-card">
             {% if message %}
                 <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% else %}cm-alert-error{% endif %}">
                     {{ message }}
                 </div>
             {% endif %}
-            <h2 class="cm-panel-title">Register</h2>
-            <p class="cm-panel-description">Create an account to start matching.</p>
+            <h1>Register</h1>
+            <p>Create your account to start matching.</p>
 
             <form id="register-form" action="/register" method="post" class="cm-form is-pw-invalid">
                 <div class="cm-field">
-                    <label class="cm-label" for="reg-name">Username</label>
-                    <input type="text" id="reg-name" name="name" required class="cm-input" autocomplete="username">
+                    <label class="cm-label" for="reg-name">Name</label>
+                    <input type="text" id="reg-name" name="name" required class="cm-input" autocomplete="name">
                 </div>
 
                 <div class="cm-field">
@@ -49,14 +236,19 @@
                     <p id="pw-error" class="cm-pw-error" role="alert"></p>
                 </div>
 
-                <button type="submit" class="cm-button cm-button-primary">
+                <div class="cm-field">
+                    <label class="cm-label" for="reg-repeat-password">Repeat Password</label>
+                    <input type="password" id="reg-repeat-password" name="repeat_password" required class="cm-input" autocomplete="new-password">
+                </div>
+
+                <button type="submit" class="register-submit">
                     Create account
                 </button>
 
-                <p class="cm-hint">
-                    Already have an account?
+                <div class="register-alt">
+                    <p class="cm-hint">Already have an account?</p>
                     <a href="/login">Sign in</a>
-                </p>
+                </div>
             </form>
         </section>
     </section>
@@ -68,8 +260,9 @@
     var SPECIAL = "!@#$%^&*";
     var form = document.getElementById("register-form");
     var input = document.getElementById("reg-password");
+    var repeatInput = document.getElementById("reg-repeat-password");
     var errEl = document.getElementById("pw-error");
-    if (!form || !input) return;
+    if (!form || !input || !repeatInput) return;
 
     function checkPassword(pw) {
         var hasSpecial = false;
@@ -126,6 +319,12 @@
             else if (!r.digit) errEl.textContent = "Include a number.";
             else if (!r.special) errEl.textContent = "Include a special character (!@#$%^&*).";
             input.focus();
+            return;
+        }
+        if (input.value !== repeatInput.value) {
+            e.preventDefault();
+            errEl.textContent = "Passwords do not match.";
+            repeatInput.focus();
         }
     });
 

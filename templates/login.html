@@ -1,20 +1,211 @@
 {% extends "base.html" %}
 {% block title %}CareerMatch AI · Login{% endblock %}
+{% block body_class %}ui-light{% endblock %}
+{% block extra_css %}
+<style>
+.login-main {
+    background: #f4f5fc;
+    min-height: calc(100vh - 60px);
+    padding: 1.35rem 1rem 2rem;
+}
+
+.login-shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.login-hero,
+.login-card {
+    background: #fff;
+    border: 1px solid #e6e8f3;
+    border-radius: 24px;
+    padding: 1.35rem;
+}
+
+.login-pill {
+    display: inline-flex;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4a5b95;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.72rem;
+}
+
+.login-title {
+    margin: 0.8rem 0 0.45rem;
+    color: #151b2c;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+}
+
+.login-sub {
+    margin: 0;
+    color: #5f6780;
+    font-size: 1rem;
+    line-height: 1.55;
+    max-width: 35ch;
+}
+
+.login-points {
+    margin-top: 1.25rem;
+    display: grid;
+    gap: 0.85rem;
+}
+
+.login-point {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 0.6rem;
+    align-items: start;
+}
+
+.login-point .icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: #f0f3ff;
+    color: #2f50da;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.login-point h4 {
+    margin: 0 0 0.15rem;
+    color: #20273a;
+    font-size: 1rem;
+}
+
+.login-point p {
+    margin: 0;
+    color: #65708b;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.login-art {
+    margin-top: 1rem;
+    min-height: 150px;
+    border-radius: 18px;
+    background:
+        radial-gradient(ellipse 60% 40% at 25% 20%, rgba(59, 130, 246, 0.35), transparent 65%),
+        radial-gradient(ellipse 50% 35% at 80% 70%, rgba(79, 70, 229, 0.35), transparent 68%),
+        linear-gradient(155deg, #1f2f4c, #101a31);
+}
+
+.login-card h1 {
+    margin: 0;
+    color: #161d2f;
+    font-size: 1.8rem;
+}
+
+.login-card p {
+    margin: 0.35rem 0 1.05rem;
+    color: #6a738d;
+}
+
+.login-card .cm-label {
+    color: #65708a;
+    font-size: 0.72rem;
+}
+
+.login-card .cm-input {
+    background: #f7f8fe;
+    border-color: #d8ddef;
+    color: #20283a;
+}
+
+.login-card .cm-input:focus {
+    border-color: #3a5ce6;
+    box-shadow: 0 0 0 3px rgba(58, 92, 230, 0.14);
+}
+
+.login-submit {
+    width: 100%;
+    border-radius: 999px;
+    padding: 0.78rem 1rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #1f4fee, #2345cc);
+    color: #fff;
+    border: 0;
+    cursor: pointer;
+}
+
+.login-alt {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.login-alt .cm-hint {
+    margin: 0;
+    color: #69728a;
+}
+
+.login-alt a {
+    color: #2448ca;
+    font-weight: 700;
+}
+
+@media (max-width: 920px) {
+    .login-shell {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
 {% block content %}
-<main id="main-content" class="cm-main cm-main-auth">
-    <section class="cm-auth-split" aria-labelledby="login-heading">
-        <div class="cm-auth-brand">
-            <p class="cm-auth-brand-title" id="login-heading">Your career, matched by AI</p>
-            <p class="cm-auth-brand-text">
-                Sign in to upload your resume, get ranked job suggestions across platforms,
-                and track applications in one place.
+<main id="main-content" class="login-main">
+    <section class="login-shell" aria-labelledby="login-heading">
+        <article class="login-hero">
+            <span class="login-pill">AI-powered curation</span>
+            <h2 class="login-title" id="login-heading">Welcome back</h2>
+            <p class="login-sub">
+                Continue your career matching workflow, review suggestions, and keep your profile tuned.
             </p>
-        </div>
-        <div class="cm-auth-panel">
-            <h1 class="cm-auth-title">Welcome back</h1>
-            <p class="cm-auth-subtitle">
-                Sign in to manage your job matches, review applied roles, and explore new suggestions.
-            </p>
+            <div class="login-points">
+                <article class="login-point">
+                    <span class="icon">⚡</span>
+                    <div>
+                        <h4>Personalized recommendations</h4>
+                        <p>Role suggestions are continuously ranked from your saved profile and resume.</p>
+                    </div>
+                </article>
+                <article class="login-point">
+                    <span class="icon">🧠</span>
+                    <div>
+                        <h4>Role-first matching</h4>
+                        <p>Expected roles drive search, so results stay aligned with your target titles.</p>
+                    </div>
+                </article>
+                <article class="login-point">
+                    <span class="icon">🔒</span>
+                    <div>
+                        <h4>Private by default</h4>
+                        <p>Your data stays protected while you manage your job discovery workflow.</p>
+                    </div>
+                </article>
+            </div>
+            <div class="login-art" aria-hidden="true"></div>
+        </article>
+
+        <section class="login-card">
+            <h1>Sign in</h1>
+            <p>Access your dashboard, suggestions, and profile.</p>
 
             {% if message %}
                 <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% else %}cm-alert-error{% endif %}">
@@ -33,18 +224,16 @@
                     <input type="password" id="login-password" name="password" required class="cm-input" autocomplete="current-password">
                 </div>
 
-                <button type="submit" class="cm-button cm-button-primary">
-                    Continue to dashboard
+                <button type="submit" class="login-submit">
+                    Continue to Dashboard
                 </button>
 
-                <div class="cm-auth-footer">
+                <div class="login-alt">
                     <p class="cm-hint">Don't have an account?</p>
-                    <a href="/register" class="cm-button cm-button-secondary">
-                        Create account
-                    </a>
+                    <a href="/register">Create account</a>
                 </div>
             </form>
-        </div>
+        </section>
     </section>
 </main>
 {% endblock %}

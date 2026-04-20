@@ -35,7 +35,7 @@
                         <tr>
                             <td>{{ u.id }}</td>
                             <td>{{ u.email }}</td>
-                            <td>{{ u.username }}</td>
+                            <td>{{ u.name }}</td>
                             <td>{{ (u.created_at or '')[:10] }}</td>
                             <td>{% if u.is_admin %}Yes{% else %}No{% endif %}</td>
                             <td class="cm-admin-actions-cell">

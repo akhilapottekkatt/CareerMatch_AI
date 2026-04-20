@@ -32,6 +32,7 @@ def sync_admins_from_env():
 # Connection
 # ─────────────────────────────────────────
 
+
 def get_connection() -> sqlite3.Connection:
     """
     Open and return a sqlite3 connection.
@@ -48,6 +49,7 @@ def get_connection() -> sqlite3.Connection:
 # Create all tables
 # ─────────────────────────────────────────
 
+
 def create_users_table():
     """
     Creates every table the app needs.
@@ -62,7 +64,7 @@ def create_users_table():
         -- ── Users ──────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS users (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            username   TEXT NOT NULL,
+            name       TEXT NOT NULL,
             email      TEXT UNIQUE NOT NULL,
             password   TEXT NOT NULL,
             created_at TEXT DEFAULT (datetime('now')),
@@ -128,6 +130,23 @@ def create_users_table():
 
       
 
+        -- ── Global job catalog (periodic fetch → DB, then matching reads this) ──
+        CREATE TABLE IF NOT EXISTS jobs (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            title          TEXT,
+            company        TEXT,
+            platform       TEXT,
+            apply_url      TEXT UNIQUE NOT NULL,
+            location       TEXT,
+            description    TEXT,
+            salary         TEXT,
+            job_type       TEXT,
+            posted         TEXT,
+            fetched_at     TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_fetched_at ON jobs(fetched_at);
+
         -- ── Job Suggestions ─────────────────────────────────────
         CREATE TABLE IF NOT EXISTS job_suggestions (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -169,11 +188,28 @@ def create_users_table():
     resume_rows = conn.execute("PRAGMA table_info(resumes)").fetchall()
     resume_cols = [r[1] for r in resume_rows]
     if resume_cols and "profile_confirmed" not in resume_cols:
-        conn.execute("ALTER TABLE resumes ADD COLUMN profile_confirmed INTEGER DEFAULT 0")
+        conn.execute(
+            "ALTER TABLE resumes ADD COLUMN profile_confirmed INTEGER DEFAULT 0"
+        )
         conn.execute("UPDATE resumes SET profile_confirmed = 1")
 
     user_rows = conn.execute("PRAGMA table_info(users)").fetchall()
     user_cols = [r[1] for r in user_rows]
+    if user_cols and "name" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
+    # Backfill name from legacy username/email for existing rows.
+    if "username" in user_cols:
+        conn.execute("""
+            UPDATE users
+            SET name = COALESCE(NULLIF(name, ''), NULLIF(username, ''), substr(email, 1, instr(email, '@') - 1))
+            WHERE name IS NULL OR trim(name) = ''
+            """)
+    else:
+        conn.execute("""
+            UPDATE users
+            SET name = COALESCE(NULLIF(name, ''), substr(email, 1, instr(email, '@') - 1))
+            WHERE name IS NULL OR trim(name) = ''
+            """)
     if user_cols and "is_admin" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
 

@@ -8,7 +8,6 @@ BERT cosine matching is kept and fixed (lazy load + returns full job dicts).
 import glob
 import json
 import os
-from datetime import datetime
 from app.database import get_connection
 
 # ═══════════════════════════════════════════════════════════════════
@@ -476,65 +475,6 @@ def rename_resume(resume_id: int, user_id: int, label: str):
         conn.commit()
     finally:
         conn.close()
-
-
-# ═══════════════════════════════════════════════════════════════════
-# SKILLS  (resume ↔ skills association table — kept from original)
-# ═══════════════════════════════════════════════════════════════════
-
-
-# def link_skills_to_resume(resume_id: int, skill_names: list):
-#     """Insert rows into resume_skills — one connection for everything."""
-#     if not skill_names:
-#         return
-#     conn = get_connection()
-#     try:
-#         for name in skill_names:
-#             name = name.strip()
-#             if not name:
-#                 continue
-
-#             # Get or create skill — same connection, no locking
-#             row = conn.execute(
-#                 "SELECT id FROM skills WHERE name = ?", (name,)
-#             ).fetchone()
-
-#             if row:
-#                 skill_id = row["id"]
-#             else:
-#                 cursor = conn.execute(
-#                     "INSERT INTO skills (name) VALUES (?)", (name,)
-#                 )
-#                 skill_id = cursor.lastrowid
-
-#             # Link to resume if not already linked
-#             exists = conn.execute(
-#                 "SELECT 1 FROM resume_skills WHERE resume_id = ? AND skill_id = ?",
-#                 (resume_id, skill_id)
-#             ).fetchone()
-#             if not exists:
-#                 conn.execute(
-#                     "INSERT INTO resume_skills (resume_id, skill_id) VALUES (?, ?)",
-#                     (resume_id, skill_id)
-#                 )
-
-#         conn.commit()
-#     finally:
-#         conn.close()
-
-
-# def get_skills_for_resume(resume_id: int) -> list:
-#     """Return list of skill names linked to a resume."""
-#     conn = get_connection()
-#     try:
-#         rows = conn.execute("""
-#             SELECT s.name FROM skills s
-#             JOIN resume_skills rs ON rs.skill_id = s.id
-#             WHERE rs.resume_id = ?
-#         """, (resume_id,)).fetchall()
-#         return [r["name"] for r in rows]
-#     finally:
-#         conn.close()
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -87,16 +87,6 @@ def _template_ctx(request: Request, **kwargs):
     return base
 
 
-def _require_admin(request: Request):
-    """Logged-in user with is_admin=1, else None."""
-    user = _require_login(request)
-    if not user:
-        return None
-    if not int(user.get("is_admin") or 0):
-        return None
-    return user
-
-
 def _ensure_admin(request: Request):
     """
     Returns (admin_user_dict, None) or (None, RedirectResponse).

@@ -4,32 +4,74 @@ Fetches real jobs from multiple sources and computes
 a real match score for each job against candidate skills.
 """
 
+from sklearn.metrics.pairwise import cosine_similarity
+
 from app.job_links import scrape_jsearch, scrape_remoteok, scrape_linkedin
 
 # ═══════════════════════════════════════════════════════════════════
-# MATCH SCORE — compares job vs candidate skills
+# SEMANTIC SCORE — BERT embeddings + cosine similarity
 # ═══════════════════════════════════════════════════════════════════
 
+_sentence_model = None
 
-def compute_match_score(job: dict, skills: list) -> float:
+
+def _get_model():
+    global _sentence_model
+    if _sentence_model is None:
+        from sentence_transformers import SentenceTransformer
+
+        print("🤖 Loading SentenceTransformer for profile matching...")
+        _sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _sentence_model
+
+
+def _profile_to_text(profile: dict) -> str:
+    skills = [str(s).strip() for s in (profile.get("skills") or []) if str(s).strip()]
+    roles = [
+        str(r).strip() for r in (profile.get("expected_roles") or []) if str(r).strip()
+    ]
+    exp = profile.get("experience_years", "")
+    location = profile.get("preferred_location", "")
+    job_type = profile.get("job_type", "")
+    return (
+        f"Expected roles: {', '.join(roles)}. "
+        f"Skills: {', '.join(skills)}. "
+        f"Experience years: {exp}. "
+        f"Preferred location: {location}. "
+        f"Job type: {job_type}."
+    ).strip()
+
+
+def _score_jobs_semantic(profile: dict, jobs: list[dict]) -> list[dict]:
     """
-    Compare job title + description against candidate skills.
-    Returns score between 0.0 and 1.0
+    Semantic ranking using BERT embeddings and cosine similarity
+    between profile text and each job title+description+company.
     """
-    if not skills:
-        return 0.0
+    if not jobs:
+        return jobs
+    profile_text = _profile_to_text(profile)
+    if not profile_text:
+        for j in jobs:
+            j["match_score"] = 0.0
+        return jobs
 
-    job_text = (
-        job.get("title", "")
-        + " "
-        + job.get("description", "")
-        + " "
-        + job.get("company", "")
-    ).lower()
-
-    matched = sum(1 for skill in skills if skill.lower() in job_text)
-    score = matched / len(skills)
-    return round(min(score, 1.0), 2)
+    model = _get_model()
+    profile_emb = model.encode([profile_text])
+    job_texts = [
+        (
+            (j.get("title", "") or "")
+            + " "
+            + (j.get("description", "") or "")
+            + " "
+            + (j.get("company", "") or "")
+        ).strip()
+        for j in jobs
+    ]
+    job_embs = model.encode(job_texts)
+    sims = cosine_similarity(profile_emb, job_embs)[0]
+    for idx, score in enumerate(sims):
+        jobs[idx]["match_score"] = round(float(score), 3)
+    return jobs
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -152,7 +194,8 @@ def fetch_global_job_pool(
 def get_best_matching_companies_from_profile(profile: dict, limit: int = 50) -> list:
     """
     Fetch and score jobs using the full user profile from DB.
-    Search uses **expected_roles** only; ``skills`` (and roles) feed keyword scoring.
+    Search uses expected_roles for fetch query generation.
+    Ranking uses semantic similarity via BERT embeddings + cosine similarity.
     """
     skills = profile.get("skills", [])
     expected_roles = profile.get("expected_roles", [])
@@ -170,10 +213,7 @@ def get_best_matching_companies_from_profile(profile: dict, limit: int = 50) -> 
     location = "Remote" if pref_location == "Remote" else "India"
     unique = fetch_global_job_pool(all_queries, location=location, max_jobs=limit)
 
-    # Score each job against skills; if none, use role titles as keywords
-    score_keywords = skills if skills else expected_roles
-    for job in unique:
-        job["match_score"] = compute_match_score(job, score_keywords)
+    unique = _score_jobs_semantic(profile, unique)
 
     # Filter by job_type if user specified one
     if job_type and job_type != "Any":

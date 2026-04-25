@@ -1,115 +1,351 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CareerMatch AI · Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Dashboard{% endblock %}
+{% block body_class %}ui-light{% endblock %}
+{% block extra_css %}
+<style>
+.home-main {
+    background: #f4f5fc;
+    min-height: calc(100vh - 60px);
+    padding: 1.6rem 1rem 2.2rem;
+}
 
-<body>
+.home-wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 1rem;
+}
 
-<header class="cm-header">
-    <div class="cm-header-inner">
-        <div class="cm-logo">
-            <span class="cm-logo-mark">CM</span>
-            <span class="cm-logo-text">CareerMatch AI</span>
-        </div>
-        <nav class="cm-nav">
-            <a href="/dashboard"   class="cm-nav-link cm-nav-link-active">Dashboard</a>
-            <a href="/suggestions" class="cm-nav-link">Suggestions</a>
-            <a href="/applied"     class="cm-nav-link">Applied Jobs</a>
-            <a href="/profile"     class="cm-nav-link">Profile</a>
-            <a href="/logout"      class="cm-nav-link">Logout</a>
-        </nav>
-    </div>
-</header>
+.home-card {
+    border-radius: 26px;
+    border: 1px solid #e6e8f3;
+    background: #ffffff;
+    padding: 1.25rem;
+}
 
-<main class="cm-main">
-    <section class="cm-shell">
+.home-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
 
-        <!-- ── Left panel: info ── -->
-        <aside class="cm-panel cm-panel-info">
-            <h1 class="cm-title">Smart job applications, powered by your resume.</h1>
-            <p class="cm-subtitle">
-                Upload your latest resume and let CareerMatch AI extract your skills,
-                search leading job platforms, and find tailored job matches for you.
+.home-pill {
+    display: inline-flex;
+    width: max-content;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #6d7490;
+    background: #f0f2fb;
+    border-radius: 999px;
+    padding: 0.32rem 0.75rem;
+}
+
+.home-title {
+    margin: 0;
+    font-size: clamp(2rem, 5vw, 4rem);
+    line-height: 0.96;
+    color: #121829;
+    letter-spacing: -0.03em;
+}
+
+.home-copy {
+    margin: 0;
+    color: #49516a;
+    line-height: 1.55;
+    font-size: 1.02rem;
+    max-width: 36ch;
+}
+
+.home-features {
+    display: grid;
+    gap: 1rem;
+}
+
+.home-feature {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.home-feature-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: #eff2fb;
+    display: grid;
+    place-items: center;
+    color: #264ad9;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.home-feature h4 {
+    margin: 0 0 0.2rem;
+    color: #1d2437;
+    font-size: 1.02rem;
+}
+
+.home-feature p {
+    margin: 0;
+    color: #5f6780;
+    font-size: 0.93rem;
+    line-height: 1.45;
+}
+
+.home-preview {
+    min-height: 180px;
+    border-radius: 20px;
+    background-image:
+        linear-gradient(to bottom, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.32)),
+        url("/static/images/banner.png");
+    background-size: cover;
+    background-position: center 42%;
+    background-repeat: no-repeat;
+}
+
+.home-right {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+.upload-card h2 {
+    margin: 0;
+    color: #151b2c;
+    font-size: 2rem;
+}
+
+.upload-card .sub {
+    margin: 0.3rem 0 1rem;
+    color: #68718b;
+}
+
+.dropzone {
+    border: 1px dashed #b9c1da;
+    border-radius: 18px;
+    background: #f6f7fe;
+    padding: 1.6rem;
+    text-align: center;
+}
+
+.dropzone h4 {
+    margin: 0.6rem 0 0.3rem;
+    color: #1f2638;
+    font-size: 1.2rem;
+}
+
+.dropzone p {
+    margin: 0;
+    color: #636c88;
+}
+
+.dropzone .cm-input {
+    background: #fff;
+    border: 1px solid #d8dced;
+    color: #1f2737;
+    margin-top: 0.85rem;
+}
+
+.upload-cta {
+    width: 100%;
+    margin-top: 0.95rem;
+    border-radius: 999px;
+    border: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #fff;
+    background: linear-gradient(135deg, #1f4fee, #2445c9);
+    padding: 0.9rem 1.2rem;
+    cursor: pointer;
+}
+
+.upload-note {
+    margin: 0.65rem 0 0;
+    text-align: center;
+    color: #7c8398;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.readiness {
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    align-items: center;
+    gap: 0.85rem;
+    background: #f4f6ff;
+}
+
+.readiness .pct {
+    width: 62px;
+    height: 62px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    color: #28774c;
+    background: conic-gradient(#47d07d 35%, #dde2ef 35% 100%);
+}
+
+.readiness .pct span {
+    background: #fff;
+    width: 50px;
+    height: 50px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 0.9rem;
+}
+
+.readiness h4 {
+    margin: 0;
+    color: #1f2738;
+}
+
+.readiness p {
+    margin: 0.18rem 0 0;
+    color: #5f6780;
+    line-height: 1.4;
+}
+
+.readiness a {
+    color: #234cd2;
+    font-weight: 700;
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+}
+
+.fact {
+    border: 1px solid #e6e8f3;
+    border-radius: 16px;
+    background: #fff;
+    padding: 1rem;
+}
+
+.fact .k {
+    color: #707893;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.fact .v {
+    margin-top: 0.25rem;
+    color: #151b2c;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+#result.cm-results {
+    margin-top: 0.8rem;
+}
+
+@media (max-width: 980px) {
+    .home-wrap {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+{% block content %}
+<main id="main-content" class="home-main">
+    <section class="home-wrap">
+        <aside class="home-card home-hero">
+            <span class="home-pill">AI-powered curation</span>
+            <h1 class="home-title">Smart job matching from your resume</h1>
+            <p class="home-copy">
+                Our Digital Curator parses your professional DNA to find opportunities
+                that align with your role goals and trajectory.
             </p>
-            <ul class="cm-features">
-                <li>Parse skills and experience from your PDF resume</li>
-                <li>Search LinkedIn, Indeed, Naukri and more</li>
-                <li>Get ranked job suggestions with match scores</li>
-                <li>Receive daily email summaries of best matches</li>
-            </ul>
+            <div class="home-features">
+                <article class="home-feature">
+                    <span class="home-feature-icon">⚙</span>
+                    <div>
+                        <h4>Semantic Parsing</h4>
+                        <p>We understand skills beyond keywords and build cleaner candidate signals.</p>
+                    </div>
+                </article>
+                <article class="home-feature">
+                    <span class="home-feature-icon">📈</span>
+                    <div>
+                        <h4>Growth Projections</h4>
+                        <p>Recommendations adapt to where your career is heading, not only past titles.</p>
+                    </div>
+                </article>
+                <article class="home-feature">
+                    <span class="home-feature-icon">🛡</span>
+                    <div>
+                        <h4>Private Matching</h4>
+                        <p>Your profile data is curated privately. You control what becomes visible.</p>
+                    </div>
+                </article>
+            </div>
+            <div class="home-preview" aria-hidden="true"></div>
         </aside>
 
-        <!-- ── Right panel: upload form ── -->
-        <section class="cm-panel cm-panel-form">
-            <h2 class="cm-panel-title">Upload resume &amp; start matching</h2>
-            <p class="cm-panel-description">
-                Upload your PDF resume — we will extract your skills and find the best
-                matching jobs across multiple platforms.
-            </p>
-
-            <!-- Profile nudge banner -->
-            <div style="
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 0.75rem 1rem;
-                background: rgba(124,58,237,0.08);
-                border: 1px solid rgba(124,58,237,0.2);
-                border-radius: 12px;
-                margin-bottom: 1.25rem;
-            ">
-                <div>
-                    <div style="font-weight:600;font-size:0.9rem;">Complete your profile</div>
-                    <div style="font-size:0.75rem;color:#94A3B8;">
-                        Add job preferences and expected roles for better matches
+        <section class="home-right">
+            <article class="home-card upload-card">
+                <h2>Start your dossier</h2>
+                <p class="sub">Upload your CV / Resume (PDF, DOCX)</p>
+                <form id="uploadForm" class="cm-form">
+                    <div class="dropzone">
+                        <div style="font-size:2rem;">☁</div>
+                        <h4>Drag &amp; drop your file here</h4>
+                        <p>or choose a file manually</p>
+                        <input type="file" id="resume" accept="application/pdf,.docx" required class="cm-input">
                     </div>
+                    <button type="submit" class="upload-cta">Upload &amp; Parse Resume</button>
+                    <p class="upload-note">Secure 256-bit AES encryption active</p>
+                </form>
+                <section id="result" class="cm-results cm-results-empty" aria-live="polite">
+                    <p class="cm-placeholder">After upload you will be redirected to profile review.</p>
+                </section>
+            </article>
+
+            <article class="home-card readiness">
+                <div class="pct"><span>35%</span></div>
+                <div>
+                    <h4>Profile Readiness</h4>
+                    <p>Your profile is partially complete. Adding a resume boosts visibility.</p>
                 </div>
-                <a href="/profile" style="
-                    padding: 0.45rem 1rem;
-                    border-radius: 8px;
-                    background: linear-gradient(135deg, #2563EB, #7C3AED);
-                    color: white;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    text-decoration: none;
-                ">Go to Profile →</a>
-            </div>
+                <a href="/profile">View Profile</a>
+            </article>
 
-            <!-- Upload form -->
-            <!-- FIX: form no longer has email field (was crashing JS) -->
-            <form id="uploadForm" class="cm-form">
-                <div class="cm-field">
-                    <label for="resume" class="cm-label">Resume (PDF or DOCX)</label>
-                    <input type="file" id="resume" accept="application/pdf,.docx" required class="cm-input">
-                </div>
-
-                <button type="submit" class="cm-button cm-button-primary">
-                    Upload &amp; Find Matching Jobs
-                </button>
-
-                <p class="cm-hint">
-                    We never share your resume with third parties without your consent.
-                </p>
-            </form>
-
-            <!-- Results area -->
-            <section id="result" class="cm-results cm-results-empty">
-                <p class="cm-placeholder">
-                    Results will appear here after you upload your resume.
-                </p>
+            <section class="facts">
+                <article class="fact">
+                    <div class="k">Work history</div>
+                    <div class="v">{% if has_resume %}Detected{% else %}Incomplete{% endif %}</div>
+                </article>
+                <article class="fact">
+                    <div class="k">Education</div>
+                    <div class="v">{% if has_resume and resume %}1+ Entry Found{% else %}Awaiting Resume{% endif %}</div>
+                </article>
             </section>
-
         </section>
     </section>
 </main>
-
+{% endblock %}
+{% block scripts %}
 <script>
-document.getElementById("uploadForm")
-.addEventListener("submit", async function(e) {
+const pendingFromServer = {{ (pending_resume_json or None) | tojson }};
+
+function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+}
+
+document.getElementById("uploadForm").addEventListener("submit", async function(e) {
     e.preventDefault();
 
     const fileInput = document.getElementById("resume");
@@ -120,17 +356,15 @@ document.getElementById("uploadForm")
         return;
     }
 
-    // Build form data — only file + optional label
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
     formData.append("label", "Dashboard Upload");
 
-    // Show loading state
     resultDiv.classList.remove("cm-results-empty");
     resultDiv.innerHTML = `
         <div class="cm-loading">
-            <div class="cm-spinner"></div>
-            <p>Analysing your resume and fetching matching jobs...</p>
+            <div class="cm-spinner" role="status" aria-label="Loading"></div>
+            <p>Reading and parsing your resume…</p>
         </div>
     `;
 
@@ -140,74 +374,48 @@ document.getElementById("uploadForm")
             body: formData
         });
 
-        // FIX: handle non-OK responses cleanly
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             resultDiv.innerHTML = `
                 <div class="cm-error">
                     <h3>Upload failed</h3>
-                    <p>${err.error || "Something went wrong. Please try again."}</p>
+                    <p>${esc(err.error || "Something went wrong. Please try again.")}</p>
                 </div>
             `;
             return;
         }
 
         const data = await response.json();
-        const skillCount = (data.skills || []).length;
-        const jobCount   = (data.jobs   || []).length;
+        if (!data.success || !data.pending_confirmation) {
+            resultDiv.innerHTML = `<div class="cm-error"><p>Unexpected response from server.</p></div>`;
+            return;
+        }
 
-        // FIX: removed dead code referencing undefined "best" and "html" variables
-        // Show clean success card and redirect to suggestions
-        resultDiv.classList.remove("cm-results-empty");
-        resultDiv.innerHTML = `
-            <div class="cm-card" style="text-align:center;padding:2rem;">
-                <div style="font-size:2.5rem;margin-bottom:1rem;">✅</div>
-                <h3 style="margin-bottom:0.5rem;">Resume Parsed Successfully!</h3>
-                <p style="color:#94A3B8;margin-bottom:0.4rem;">
-                    Extracted <strong style="color:white;">${skillCount} skills</strong>
-                    · Found <strong style="color:white;">${jobCount} matching jobs</strong>
-                </p>
-                <p style="color:#94A3B8;margin-bottom:1.5rem;font-size:0.875rem;">
-                    Your job suggestions are ready. You can also review your profile
-                    to improve match accuracy.
-                </p>
-                <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
-                    <a href="/suggestions" style="
-                        display:inline-block;
-                        padding:0.75rem 1.75rem;
-                        border-radius:10px;
-                        background:linear-gradient(135deg,#2563EB,#7C3AED);
-                        color:white;
-                        font-weight:600;
-                        text-decoration:none;
-                        font-size:0.9rem;
-                    ">View Job Suggestions →</a>
-                    <a href="/profile" style="
-                        display:inline-block;
-                        padding:0.75rem 1.75rem;
-                        border-radius:10px;
-                        background:transparent;
-                        border:1px solid rgba(124,58,237,0.4);
-                        color:#A78BFA;
-                        font-weight:600;
-                        text-decoration:none;
-                        font-size:0.9rem;
-                    ">Review Profile</a>
-                </div>
-            </div>
-        `;
-
+        window.location.href = "/profile";
     } catch (err) {
         console.error("Upload error:", err);
         resultDiv.innerHTML = `
             <div class="cm-error">
                 <h3>Unexpected error</h3>
-                <p>Please check your internet connection and try again.</p>
+                <p>Please check your connection and try again.</p>
             </div>
         `;
     }
 });
-</script>
 
-</body>
-</html>
+(function() {
+    const resultDiv = document.getElementById("result");
+    if (pendingFromServer && pendingFromServer.resume_id) {
+        resultDiv.classList.remove("cm-results-empty");
+        resultDiv.innerHTML = `
+            <div class="cm-card cm-success-card cm-success-card--soft">
+                <p class="cm-muted" style="margin:0 0 0.75rem;">
+                    You have a parsed resume waiting for confirmation on your profile.
+                </p>
+                <a href="/profile" class="cm-link-btn cm-link-btn-primary">Go to profile</a>
+            </div>
+        `;
+    }
+})();
+</script>
+{% endblock %}

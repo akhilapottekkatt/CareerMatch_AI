@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}CareerMatch AI · Admin · Jobs{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/admin.css" />{% endblock %}
+{% block content %}
+<main id="main-content" class="cm-main">
+    <div class="cm-admin-wrap">
+        <nav class="cm-admin-local" aria-label="Admin sections">
+            <a href="/admin" class="cm-admin-local-link">Overview</a>
+            <a href="/admin/users" class="cm-admin-local-link">Users</a>
+            <a href="/admin/jobs" class="cm-admin-local-link cm-admin-local-link-active">Job suggestions</a>
+        </nav>
+
+        {% if message %}
+        <div class="cm-alert {% if msg_type == 'success' %}cm-alert-success{% elif msg_type == 'error' %}cm-alert-error{% endif %}" role="status">{{ message }}</div>
+        {% endif %}
+
+        <section class="cm-panel cm-admin-panel">
+            <h1 class="cm-title cm-admin-title">Job suggestions</h1>
+            <p class="cm-subtitle">All stored suggestions across users. Removing a row only deletes this suggestion record (not external job postings).</p>
+
+            <form method="get" action="/admin/jobs" class="cm-admin-filter">
+                <label class="cm-label" for="filter-user">Filter by user</label>
+                <select name="user_id" id="filter-user" class="cm-input cm-input-select" onchange="this.form.submit()">
+                    <option value="">All users</option>
+                    {% for u in all_users %}
+                    <option value="{{ u.id }}" {% if filter_user_id == u.id %}selected{% endif %}>{{ u.email }} ({{ u.id }})</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="page" value="1" />
+            </form>
+
+            <p class="cm-admin-muted">Showing {{ jobs|length }} of {{ total }} (page {{ page }} / {{ total_pages }})</p>
+
+            <div class="cm-admin-table-wrap cm-admin-table-wrap-wide">
+                <table class="cm-admin-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">User</th>
+                            <th scope="col">Title</th>
+                            <th scope="col">Company</th>
+                            <th scope="col">Platform</th>
+                            <th scope="col">Score</th>
+                            <th scope="col">Suggested</th>
+                            <th scope="col">Applied</th>
+                            <th scope="col"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for j in jobs %}
+                        <tr>
+                            <td>{{ j.id }}</td>
+                            <td>{{ j.user_email }}</td>
+                            <td>{{ j.title }}</td>
+                            <td>{{ j.company }}</td>
+                            <td>{{ j.platform }}</td>
+                            <td>{% if j.match_score <= 1 %}{{ (j.match_score * 100)|round|int }}%{% else %}{{ j.match_score|round|int }}{% endif %}</td>
+                            <td>{{ (j.date_suggested or '')[:16] }}</td>
+                            <td>{% if j.is_applied %}Yes{% else %}No{% endif %}</td>
+                            <td>
+                                <form method="post" action="/admin/jobs/{{ j.id }}/delete" class="cm-admin-inline-form" onsubmit="return confirm('Remove this suggestion?');">
+                                    <button type="submit" class="cm-btn cm-btn-small cm-btn-danger">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="cm-admin-muted">No suggestions{% if filter_user_id %} for this user{% endif %}.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if total_pages > 1 %}
+            <nav class="cm-admin-pagination" aria-label="Pagination">
+                {% if page > 1 %}
+                <a class="cm-link-btn cm-link-btn-ghost" href="/admin/jobs?page={{ page - 1 }}{% if filter_user_id %}&user_id={{ filter_user_id }}{% endif %}">Previous</a>
+                {% endif %}
+                {% if page < total_pages %}
+                <a class="cm-link-btn cm-link-btn-ghost" href="/admin/jobs?page={{ page + 1 }}{% if filter_user_id %}&user_id={{ filter_user_id }}{% endif %}">Next</a>
+                {% endif %}
+            </nav>
+            {% endif %}
+        </section>
+    </div>
+</main>
+{% endblock %}

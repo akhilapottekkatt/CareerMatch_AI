@@ -1,5 +1,6 @@
 import pdfplumber
 
+
 def extract_text(file_path: str) -> str:
     """
     Extract text from PDF using pdfplumber.

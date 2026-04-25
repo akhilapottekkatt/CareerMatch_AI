@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}CareerMatch AI{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,400..700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/css/style.css" />
+    {% block extra_head %}{% endblock %}
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <a class="cm-skip-link" href="#main-content">Skip to content</a>
+    <header class="cm-header">
+        <div class="cm-header-inner">
+            <a href="{% if active_nav %}/dashboard{% else %}/login{% endif %}" class="cm-logo">
+                <span class="cm-logo-mark" aria-hidden="true">CM</span>
+                <span class="cm-logo-text">CareerMatch AI</span>
+            </a>
+            {% if active_nav %}
+            <nav class="cm-nav" aria-label="Main">
+                <a href="/dashboard" class="cm-nav-link{% if active_nav == 'dashboard' %} cm-nav-link-active{% endif %}">Dashboard</a>
+                <a href="/suggestions" class="cm-nav-link{% if active_nav == 'suggestions' %} cm-nav-link-active{% endif %}">Suggestions</a>
+                <a href="/profile" class="cm-nav-link{% if active_nav == 'profile' %} cm-nav-link-active{% endif %}">Profile</a>
+                {% if is_admin %}
+                <a href="/admin" class="cm-nav-link cm-nav-link-admin{% if active_nav in ['admin', 'admin_users', 'admin_jobs'] %} cm-nav-link-active{% endif %}">Admin</a>
+                {% endif %}
+                <a href="/logout" class="cm-nav-link">Logout</a>
+            </nav>
+            {% endif %}
+        </div>
+    </header>
+
+    {% block content %}{% endblock %}
+
+    <footer class="cm-footer">
+        <div class="cm-footer-inner">
+            <div class="cm-footer-brand">
+                <div class="cm-footer-logo">CareerMatch AI</div>
+                <div class="cm-footer-copy">© 2026 CareerMatch AI. All rights reserved.</div>
+            </div>
+            <nav class="cm-footer-links" aria-label="Footer">
+                <a href="/dashboard">Dashboard</a>
+                <a href="/suggestions">Suggestions</a>
+                <a href="/profile">Profile</a>
+            </nav>
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
